@@ -2,37 +2,59 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuth, UserRole } from '@/lib/auth-context';
+import { useAuth } from '@/lib/auth-context';
+import type { PermissionKey } from '@/lib/rbac';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
-  allowedRoles?: UserRole[];
+  /** User must have at least one of these permissions */
+  allowedPermissions?: PermissionKey[];
+  /** User must have at least one of these role ids (or legacy slugs: head_pastor, church_admin, finance_officer) */
+  allowedRoles?: string[];
+  /** If true, Head Pastor (super admin) always has access regardless of permissions */
+  allowSuperAdmin?: boolean;
 }
 
-export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) {
-  const { isAuthenticated, user } = useAuth();
+export function ProtectedRoute({
+  children,
+  allowedPermissions,
+  allowedRoles,
+  allowSuperAdmin = false,
+}: ProtectedRouteProps) {
+  const { isAuthenticated, hasPermission, hasRole, isSuperAdmin } = useAuth();
   const router = useRouter();
+
+  const hasRequiredPermission =
+    !allowedPermissions?.length ||
+    allowedPermissions.some((p) => hasPermission(p)) ||
+    (allowSuperAdmin && isSuperAdmin);
+  const hasRequiredRole =
+    !allowedRoles?.length || allowedRoles.some((r) => hasRole(r));
 
   useEffect(() => {
     if (!isAuthenticated) {
       router.push('/signin');
       return;
     }
-
-    if (allowedRoles && user && !allowedRoles.includes(user.role)) {
+    if (allowedPermissions?.length && !hasRequiredPermission) {
+      router.push('/dashboard');
+      return;
+    }
+    if (allowedRoles?.length && !hasRequiredRole) {
       router.push('/dashboard');
     }
-  }, [isAuthenticated, user, allowedRoles, router]);
+  }, [
+    isAuthenticated,
+    allowedPermissions,
+    allowedRoles,
+    hasRequiredPermission,
+    hasRequiredRole,
+    router,
+  ]);
 
-  if (!isAuthenticated) {
-    return null;
-  }
-
-  if (allowedRoles && user && !allowedRoles.includes(user.role)) {
-    return null;
-  }
+  if (!isAuthenticated) return null;
+  if (allowedPermissions?.length && !hasRequiredPermission) return null;
+  if (allowedRoles?.length && !hasRequiredRole) return null;
 
   return <>{children}</>;
 }
-
-

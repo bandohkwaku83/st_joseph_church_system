@@ -3,7 +3,6 @@
 import { useState } from 'react';
 import {
   HiOutlineOfficeBuilding,
-  HiOutlineBookOpen,
   HiUserGroup,
   HiOutlineUsers,
 } from 'react-icons/hi';
@@ -21,8 +20,7 @@ interface Department {
   members: number;
   status: 'Active' | 'Inactive';
   description: string;
-  type: 'organization' | 'class';
-  logo?: string;
+  type: 'organization';
 }
 
 interface Role {
@@ -43,191 +41,28 @@ export default function DepartmentsPage() {
   const [showModal, setShowModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
   const [showManageModal, setShowManageModal] = useState(false);
-  const [showAddClassModal, setShowAddClassModal] = useState(false);
-  const [showViewClassModal, setShowViewClassModal] = useState(false);
-  const [showManageClassModal, setShowManageClassModal] = useState(false);
   const [selectedOrganization, setSelectedOrganization] = useState<Department | null>(null);
   const [managingOrganization, setManagingOrganization] = useState<Department | null>(null);
-  const [selectedClass, setSelectedClass] = useState<Department | null>(null);
-  const [managingClass, setManagingClass] = useState<Department | null>(null);
   const [organizationSearchTerm, setOrganizationSearchTerm] = useState('');
-  const [classSearchTerm, setClassSearchTerm] = useState('');
   const [manageForm, setManageForm] = useState({
-    name: '',
-    leader: '',
-    status: 'Active' as 'Active' | 'Inactive',
-  });
-  const [classForm, setClassForm] = useState({
-    name: '',
-    leader: '',
-    status: 'Active' as 'Active' | 'Inactive',
-  });
-  const [manageClassForm, setManageClassForm] = useState({
     name: '',
     leader: '',
     status: 'Active' as 'Active' | 'Inactive',
   });
 
   const [departments, setDepartments] = useState<Department[]>([
-    {
-      id: 1,
-      name: "Men's Fellowship",
-      leader: 'David Brown',
-      members: 80,
-      status: 'Active',
-      description: 'Men\'s ministry and fellowship',
-      type: 'organization',
-      logo: '/images/logos/mens.png',
-    },
-    {
-      id: 2,
-      name: 'The Church Guild',
-      leader: 'Sarah Williams',
-      members: 60,
-      status: 'Active',
-      description: 'Church Guild activities',
-      type: 'organization',
-      logo: '/images/logos/guild.png',
-    },
-    {
-      id: 3,
-      name: "Women's Fellowship",
-      leader: 'Jane Smith',
-      members: 100,
-      status: 'Active',
-      description: 'Women\'s ministry and fellowship',
-      type: 'organization',
-      logo: '/images/logos/wflogo.png',
-    },
-    {
-      id: 4,
-      name: 'Youth Fellowship',
-      leader: 'Michael Johnson',
-      members: 150,
-      status: 'Active',
-      description: 'Youth ministry and activities',
-      type: 'organization',
-      logo: '/images/logos/youth .png',
-    },
-    {
-      id: 5,
-      name: 'Singing Band',
-      leader: 'Robert Taylor',
-      members: 45,
-      status: 'Active',
-      description: 'Singing band ministry',
-      type: 'organization',
-      logo: '/images/logos/band.png',
-    },
-    {
-      id: 6,
-      name: 'Church Choir',
-      leader: 'Sarah Williams',
-      members: 50,
-      status: 'Active',
-      description: 'Church choir ministry',
-      type: 'organization',
-      logo: '/images/logos/choir.png',
-    },
-    {
-      id: 7,
-      name: 'SUWMA',
-      leader: 'Mary Johnson',
-      members: 75,
-      status: 'Active',
-      description: 'SUWMA organization',
-      type: 'organization',
-      logo: '/images/logos/suwma.png',
-    },
-    {
-      id: 8,
-      name: 'Boys & Girls Brigade',
-      leader: 'James Wilson',
-      members: 65,
-      status: 'Active',
-      description: 'Boys & Girls Brigade activities',
-      type: 'organization',
-      logo: '/images/logos/bb.png',
-    },
-    {
-      id: 9,
-      name: 'Christ Little Band',
-      leader: 'Patricia Brown',
-      members: 40,
-      status: 'Active',
-      description: 'Christ Little Band activities',
-      type: 'organization',
-      logo: '/images/logos/little.png',
-    },
-    {
-      id: 10,
-      name: 'Girls Fellowship',
-      leader: 'Emily Davis',
-      members: 55,
-      status: 'Active',
-      description: 'Girls Fellowship activities',
-      type: 'organization',
-      logo: '/images/logos/girls.png',
-    },
-    {
-      id: 11,
-      name: "Children's Ministry",
-      leader: 'Linda Thompson',
-      members: 35,
-      status: 'Active',
-      description: 'Children\'s ministry and programs',
-      type: 'organization',
-      logo: '/images/logos/children.png',
-    },
-    {
-      id: 12,
-      name: 'Wesley Class',
-      leader: 'Thomas Anderson',
-      members: 45,
-      status: 'Active',
-      description: 'Wesley class for adult members - Bible study and fellowship',
-      type: 'class',
-    },
-    {
-      id: 13,
-      name: 'Love Class',
-      leader: 'Mary Johnson',
-      members: 38,
-      status: 'Active',
-      description: 'Love class for adult members - Bible study and fellowship',
-      type: 'class',
-    },
-    {
-      id: 14,
-      name: 'Hope Class',
-      leader: 'James Wilson',
-      members: 42,
-      status: 'Active',
-      description: 'Hope class for adult members - Bible study and fellowship',
-      type: 'class',
-    },
-    {
-      id: 15,
-      name: 'Faith Class',
-      leader: 'Patricia Brown',
-      members: 35,
-      status: 'Active',
-      description: 'Faith class for adult members - Bible study and fellowship',
-      type: 'class',
-    },
-    {
-      id: 16,
-      name: 'Joy Class',
-      leader: 'Robert Taylor',
-      members: 40,
-      status: 'Active',
-      description: 'Joy class for adult members - Bible study and fellowship',
-      type: 'class',
-    },
+    { id: 1, name: 'Christian Mothers Association', leader: 'Mary Johnson', members: 85, status: 'Active', description: 'Christian Mothers Association', type: 'organization' },
+    { id: 2, name: 'Knights of St. John International (KSJI)', leader: 'James Wilson', members: 42, status: 'Active', description: 'Knights of St. John International', type: 'organization' },
+    { id: 3, name: 'Knights and Ladies of Marshall', leader: 'David Brown', members: 38, status: 'Active', description: 'Knights and Ladies of Marshall', type: 'organization' },
+    { id: 4, name: 'Catholic Youth Organization (CYO)', leader: 'Michael Johnson', members: 120, status: 'Active', description: 'Catholic Youth Organization', type: 'organization' },
+    { id: 5, name: 'Legion of Mary', leader: 'Patricia Brown', members: 55, status: 'Active', description: 'Legion of Mary', type: 'organization' },
+    { id: 6, name: 'Choir', leader: 'Sarah Williams', members: 48, status: 'Active', description: 'Parish choir ministry', type: 'organization' },
+    { id: 7, name: 'Altar Servers', leader: 'Emmanuel Osei', members: 22, status: 'Active', description: 'Altar servers ministry', type: 'organization' },
+    { id: 8, name: 'Lectors', leader: 'Linda Thompson', members: 18, status: 'Active', description: 'Lectors and readers ministry', type: 'organization' },
   ]);
 
   const roles: Role[] = [
-    { role: 'Pastor', permissions: ['Full Access'], members: 2 },
+    { role: 'Priest', permissions: ['Full Access'], members: 2 },
     { role: 'Admin', permissions: ['Members', 'Attendance', 'Finance'], members: 3 },
     { role: 'Treasurer', permissions: ['Finance', 'Reports'], members: 1 },
     { role: 'Department Leader', permissions: ['Department Members', 'Attendance'], members: 12 },
@@ -236,22 +71,17 @@ export default function DepartmentsPage() {
   // Sample members data for organizations
   const organizationMembers: Record<number, OrganizationMember[]> = {
     1: [
-      { id: 1, name: 'Kwame Asante', phone: '+233 24 123 4567', email: 'kwame.asante@gmail.com' },
-      { id: 2, name: 'Kofi Mensah', phone: '+233 20 234 5678', email: 'kofi.mensah@yahoo.com' },
-      { id: 3, name: 'Yaw Boateng', phone: '+233 26 345 6789', email: 'yaw.boateng@hotmail.com' },
-      { id: 4, name: 'Emmanuel Osei', phone: '+233 24 456 7890', email: 'emmanuel.osei@gmail.com' },
-      { id: 5, name: 'Daniel Appiah', phone: '+233 20 567 8901', email: 'daniel.appiah@yahoo.com' },
+      { id: 1, name: 'Mary Johnson', phone: '+233 24 123 4567', email: 'mary.johnson@gmail.com' },
+      { id: 2, name: 'Grace Mensah', phone: '+233 20 234 5678', email: 'grace.mensah@yahoo.com' },
+      { id: 3, name: 'Ama Adjei', phone: '+233 26 345 6789', email: 'ama.adjei@hotmail.com' },
     ],
     2: [
-      { id: 1, name: 'Sarah Williams', phone: '+233 24 111 2222', email: 'sarah.williams@gmail.com' },
-      { id: 2, name: 'Grace Mensah', phone: '+233 20 222 3333', email: 'grace.mensah@yahoo.com' },
-      { id: 3, name: 'Mary Ofori', phone: '+233 26 333 4444', email: 'mary.ofori@hotmail.com' },
+      { id: 1, name: 'James Wilson', phone: '+233 24 111 2222', email: 'james.wilson@gmail.com' },
+      { id: 2, name: 'David Osei', phone: '+233 20 222 3333', email: 'david.osei@yahoo.com' },
     ],
     3: [
-      { id: 1, name: 'Ama Adjei', phone: '+233 24 555 6666', email: 'ama.adjei@gmail.com' },
-      { id: 2, name: 'Akosua Darko', phone: '+233 20 666 7777', email: 'akosua.darko@yahoo.com' },
-      { id: 3, name: 'Efua Asante', phone: '+233 26 777 8888', email: 'efua.asante@hotmail.com' },
-      { id: 4, name: 'Abena Osei', phone: '+233 24 888 9999', email: 'abena.osei@gmail.com' },
+      { id: 1, name: 'David Brown', phone: '+233 24 555 6666', email: 'david.brown@gmail.com' },
+      { id: 2, name: 'Patricia Brown', phone: '+233 20 666 7777', email: 'patricia.brown@yahoo.com' },
     ],
     4: [
       { id: 1, name: 'Michael Johnson', phone: '+233 24 999 0000', email: 'michael.johnson@gmail.com' },
@@ -259,70 +89,20 @@ export default function DepartmentsPage() {
       { id: 3, name: 'Samuel Tetteh', phone: '+233 26 111 2222', email: 'samuel.tetteh@hotmail.com' },
     ],
     5: [
-      { id: 1, name: 'Robert Taylor', phone: '+233 24 222 3333', email: 'robert.taylor@gmail.com' },
-      { id: 2, name: 'James Amoah', phone: '+233 20 333 4444', email: 'james.amoah@yahoo.com' },
-    ],
-    6: [
-      { id: 1, name: 'Sarah Williams', phone: '+233 24 444 5555', email: 'sarah.williams@gmail.com' },
-      { id: 2, name: 'Patricia Brown', phone: '+233 20 555 6666', email: 'patricia.brown@yahoo.com' },
-      { id: 3, name: 'Linda Thompson', phone: '+233 26 666 7777', email: 'linda.thompson@hotmail.com' },
-    ],
-    7: [
-      { id: 1, name: 'Mary Johnson', phone: '+233 24 777 8888', email: 'mary.johnson@gmail.com' },
-      { id: 2, name: 'Esther Mensah', phone: '+233 20 888 9999', email: 'esther.mensah@yahoo.com' },
-    ],
-    8: [
-      { id: 1, name: 'James Wilson', phone: '+233 24 999 0000', email: 'james.wilson@gmail.com' },
-      { id: 2, name: 'David Osei', phone: '+233 20 000 1111', email: 'david.osei@yahoo.com' },
-      { id: 3, name: 'Peter Asante', phone: '+233 26 111 2222', email: 'peter.asante@hotmail.com' },
-    ],
-    9: [
       { id: 1, name: 'Patricia Brown', phone: '+233 24 222 3333', email: 'patricia.brown@gmail.com' },
       { id: 2, name: 'Ruth Adjei', phone: '+233 20 333 4444', email: 'ruth.adjei@yahoo.com' },
     ],
-    10: [
-      { id: 1, name: 'Emily Davis', phone: '+233 24 444 5555', email: 'emily.davis@gmail.com' },
-      { id: 2, name: 'Joyce Ofori', phone: '+233 20 555 6666', email: 'joyce.ofori@yahoo.com' },
-      { id: 3, name: 'Gifty Asante', phone: '+233 26 666 7777', email: 'gifty.asante@hotmail.com' },
+    6: [
+      { id: 1, name: 'Sarah Williams', phone: '+233 24 444 5555', email: 'sarah.williams@gmail.com' },
+      { id: 2, name: 'Linda Thompson', phone: '+233 20 555 6666', email: 'linda.thompson@yahoo.com' },
     ],
-    11: [
-      { id: 1, name: 'Linda Thompson', phone: '+233 24 777 8888', email: 'linda.thompson@gmail.com' },
-      { id: 2, name: 'Cynthia Mensah', phone: '+233 20 888 9999', email: 'cynthia.mensah@yahoo.com' },
-      { id: 3, name: 'Doris Osei', phone: '+233 26 999 0000', email: 'doris.osei@hotmail.com' },
+    7: [
+      { id: 1, name: 'Emmanuel Osei', phone: '+233 24 777 8888', email: 'emmanuel.osei@gmail.com' },
+      { id: 2, name: 'Daniel Appiah', phone: '+233 20 888 9999', email: 'daniel.appiah@yahoo.com' },
     ],
-  };
-
-  // Sample members data for Bible classes
-  const classMembers: Record<number, OrganizationMember[]> = {
-    12: [
-      { id: 1, name: 'Thomas Anderson', phone: '+233 24 111 1111', email: 'thomas.anderson@gmail.com' },
-      { id: 2, name: 'John Mensah', phone: '+233 20 222 2222', email: 'john.mensah@yahoo.com' },
-      { id: 3, name: 'Paul Osei', phone: '+233 26 333 3333', email: 'paul.osei@hotmail.com' },
-      { id: 4, name: 'Mark Asante', phone: '+233 24 444 4444', email: 'mark.asante@gmail.com' },
-      { id: 5, name: 'Luke Boateng', phone: '+233 20 555 5555', email: 'luke.boateng@yahoo.com' },
-    ],
-    13: [
-      { id: 1, name: 'Mary Johnson', phone: '+233 24 666 6666', email: 'mary.johnson@gmail.com' },
-      { id: 2, name: 'Sarah Adjei', phone: '+233 20 777 7777', email: 'sarah.adjei@yahoo.com' },
-      { id: 3, name: 'Ruth Ofori', phone: '+233 26 888 8888', email: 'ruth.ofori@hotmail.com' },
-      { id: 4, name: 'Esther Darko', phone: '+233 24 999 9999', email: 'esther.darko@gmail.com' },
-    ],
-    14: [
-      { id: 1, name: 'James Wilson', phone: '+233 24 101 1010', email: 'james.wilson@gmail.com' },
-      { id: 2, name: 'David Brown', phone: '+233 20 202 2020', email: 'david.brown@yahoo.com' },
-      { id: 3, name: 'Peter Tetteh', phone: '+233 26 303 3030', email: 'peter.tetteh@hotmail.com' },
-      { id: 4, name: 'Andrew Owusu', phone: '+233 24 404 4040', email: 'andrew.owusu@gmail.com' },
-    ],
-    15: [
-      { id: 1, name: 'Patricia Brown', phone: '+233 24 505 5050', email: 'patricia.brown@gmail.com' },
-      { id: 2, name: 'Grace Mensah', phone: '+233 20 606 6060', email: 'grace.mensah@yahoo.com' },
-      { id: 3, name: 'Hope Asante', phone: '+233 26 707 7070', email: 'hope.asante@hotmail.com' },
-    ],
-    16: [
-      { id: 1, name: 'Robert Taylor', phone: '+233 24 808 8080', email: 'robert.taylor@gmail.com' },
-      { id: 2, name: 'Michael Osei', phone: '+233 20 909 9090', email: 'michael.osei@yahoo.com' },
-      { id: 3, name: 'Daniel Appiah', phone: '+233 26 010 1010', email: 'daniel.appiah@hotmail.com' },
-      { id: 4, name: 'Samuel Boateng', phone: '+233 24 121 2121', email: 'samuel.boateng@gmail.com' },
+    8: [
+      { id: 1, name: 'Linda Thompson', phone: '+233 24 999 0000', email: 'linda.thompson@gmail.com' },
+      { id: 2, name: 'Cynthia Mensah', phone: '+233 20 000 1111', email: 'cynthia.mensah@yahoo.com' },
     ],
   };
 
@@ -343,8 +123,7 @@ export default function DepartmentsPage() {
   ];
 
   // Calculate stats
-  const totalOrganizations = departments.filter(d => d.type === 'organization').length;
-  const totalClasses = departments.filter(d => d.type === 'class').length;
+  const totalOrganizations = departments.length;
   const uniqueLeaders = new Set(departments.map(d => d.leader)).size;
 
   const stats = [
@@ -355,12 +134,6 @@ export default function DepartmentsPage() {
       color: 'text-blue-600'
     },
     { 
-      label: 'Total Bible Classes', 
-      value: totalClasses.toString(), 
-      icon: HiOutlineBookOpen,
-      color: 'text-green-600'
-    },
-    { 
       label: 'Leaders', 
       value: uniqueLeaders.toString(), 
       icon: HiUserGroup,
@@ -368,20 +141,10 @@ export default function DepartmentsPage() {
     },
   ];
 
-  // Separate organizations and classes
-  const organizations = departments.filter(d => d.type === 'organization');
-  const bibleClasses = departments.filter(d => d.type === 'class');
-
   // Filter organizations
-  const filteredOrganizations = organizations.filter((org) =>
+  const filteredOrganizations = departments.filter((org) =>
     org.name.toLowerCase().includes(organizationSearchTerm.toLowerCase()) ||
     org.leader.toLowerCase().includes(organizationSearchTerm.toLowerCase())
-  );
-
-  // Filter classes
-  const filteredClasses = bibleClasses.filter((cls) =>
-    cls.name.toLowerCase().includes(classSearchTerm.toLowerCase()) ||
-    cls.leader.toLowerCase().includes(classSearchTerm.toLowerCase())
   );
 
   // Table columns for Organizations
@@ -443,78 +206,7 @@ export default function DepartmentsPage() {
     },
   ];
 
-  // Table columns for Bible Classes
-  const classColumns: ColumnsType<Department> = [
-    {
-      title: 'Class Name',
-      dataIndex: 'name',
-      key: 'name',
-      render: (text: string) => (
-        <span className="text-sm font-semibold text-gray-900">{text}</span>
-      ),
-    },
-    {
-      title: 'Class Leader',
-      dataIndex: 'leader',
-      key: 'leader',
-      render: (text: string) => (
-        <span className="text-sm text-gray-900">{text}</span>
-      ),
-    },
-    {
-      title: 'Members',
-      dataIndex: 'members',
-      key: 'members',
-      render: (members: number) => (
-        <span className="text-sm font-semibold text-green-600">{members}</span>
-      ),
-      sorter: (a, b) => a.members - b.members,
-    },
-    {
-      title: 'Status',
-      dataIndex: 'status',
-      key: 'status',
-      render: (status: string) => (
-        <Tag color={status === 'Active' ? 'green' : 'default'}>
-          {status}
-        </Tag>
-      ),
-    },
-    {
-      title: 'Actions',
-      key: 'actions',
-      render: (_, record) => (
-        <Space>
-          <AntButton 
-            type="link" 
-            icon={<EyeOutlined />} 
-            className="text-blue-600"
-            title="View"
-            onClick={() => {
-              setSelectedClass(record);
-              setShowViewClassModal(true);
-            }}
-          />
-          <AntButton 
-            type="link" 
-            icon={<EditOutlined />} 
-            className="text-green-600"
-            title="Manage"
-            onClick={() => {
-              setManagingClass(record);
-              setManageClassForm({
-                name: record.name,
-                leader: record.leader,
-                status: record.status,
-              });
-              setShowManageClassModal(true);
-            }}
-          />
-        </Space>
-      ),
-    },
-  ];
-
+  // Role table columns
   const roleColumns: ColumnsType<Role> = [
     {
       title: 'Role',
@@ -566,16 +258,16 @@ export default function DepartmentsPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
-            Organizations/Classes & Roles
+            Organizations & Roles
           </h1>
           <p className="text-gray-600 mt-1">
-            Manage organizations, classes, assign leaders, and configure role permissions
+            Manage organizations, assign leaders, and configure role permissions
           </p>
         </div>
         {!hasRole('head_pastor') && (
           <Button onClick={() => setShowModal(true)} className="shadow-lg">
             <PlusOutlined className="mr-2" />
-            Create Organization/Class
+            Create Organization
           </Button>
         )}
       </div>
@@ -641,32 +333,8 @@ export default function DepartmentsPage() {
                 >
                   <CardContent className="p-6">
                     <div className="mb-4 flex items-center gap-4">
-                      <div className="flex-shrink-0">
-                        {org.logo ? (
-                          <img
-                            src={org.logo}
-                            alt={org.name}
-                            className="w-12 h-12 rounded-lg object-cover border-2 border-gray-200"
-                            onError={(e) => {
-                              // Fallback to initials if image fails to load
-                              const target = e.target as HTMLImageElement;
-                              target.style.display = 'none';
-                              const fallback = target.nextElementSibling as HTMLElement;
-                              if (fallback) fallback.style.display = 'flex';
-                            }}
-                          />
-                        ) : null}
-                        <div
-                          className="w-12 h-12 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-sm"
-                          style={{ display: org.logo ? 'none' : 'flex' }}
-                        >
-                          {org.name
-                            .split(' ')
-                            .map((word) => word[0])
-                            .join('')
-                            .substring(0, 2)
-                            .toUpperCase()}
-                        </div>
+                      <div className="flex-shrink-0 w-12 h-12 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white">
+                        <HiOutlineOfficeBuilding className="h-6 w-6" />
                       </div>
                       <div className="flex-1 min-w-0">
                         <h3 className="text-base font-semibold text-gray-900 mb-1 truncate">
@@ -732,55 +400,6 @@ export default function DepartmentsPage() {
         </CardContent>
       </Card>
 
-      {/* Bible Classes Table */}
-      <Card className="relative overflow-hidden">
-        <CardHeader className="pb-4 relative z-10">
-          <div className="flex items-center justify-between mb-4">
-            <CardTitle className="text-base font-semibold text-gray-900">
-              Bible Classes
-            </CardTitle>
-            <Space>
-              <AntInput
-                placeholder="Search Bible classes..."
-                prefix={<SearchOutlined />}
-                value={classSearchTerm}
-                onChange={(e) => setClassSearchTerm(e.target.value)}
-                style={{ width: 250 }}
-              />
-              {!hasRole('head_pastor') && (
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  onClick={() => {
-                    setClassForm({
-                      name: '',
-                      leader: '',
-                      status: 'Active',
-                    });
-                    setShowAddClassModal(true);
-                  }}
-                >
-                  <PlusOutlined className="mr-1" />
-                  Add Bible Class
-                </Button>
-              )}
-            </Space>
-          </div>
-        </CardHeader>
-        <CardContent className="relative z-10">
-          <Table
-            columns={classColumns}
-            dataSource={filteredClasses}
-            rowKey={(record) => `class-${record.id}`}
-            pagination={{
-              pageSize: 10,
-              showSizeChanger: true,
-              showTotal: (total) => `Total ${total} Bible classes`,
-            }}
-          />
-        </CardContent>
-      </Card>
-
       {/* Role-Based Access - Hidden for head_pastor and church_admin */}
       {!hasRole('head_pastor') && !hasRole('church_admin') && (
         <Card className="relative overflow-hidden">
@@ -823,31 +442,10 @@ export default function DepartmentsPage() {
         {selectedOrganization && (
           <div className="p-4 sm:p-6">
             <div className="flex items-start gap-6 mb-6">
-              {selectedOrganization.logo ? (
-                <img
-                  src={selectedOrganization.logo}
-                  alt={selectedOrganization.name}
-                  className="w-24 h-24 rounded-lg object-cover border-2 border-gray-200"
-                  onError={(e) => {
-                    const target = e.target as HTMLImageElement;
-                    target.style.display = 'none';
-                    const fallback = target.nextElementSibling as HTMLElement;
-                    if (fallback) fallback.style.display = 'flex';
-                  }}
-                />
-              ) : null}
-              <div
-                className="w-24 h-24 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-2xl"
-                style={{ display: selectedOrganization.logo ? 'none' : 'flex' }}
-              >
-                {selectedOrganization.name
-                  .split(' ')
-                  .map((word) => word[0])
-                  .join('')
-                  .substring(0, 2)
-                  .toUpperCase()}
+              <div className="flex-shrink-0 w-16 h-16 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white">
+                <HiOutlineOfficeBuilding className="h-8 w-8" />
               </div>
-              <div className="flex-1">
+              <div className="flex-1 min-w-0">
                 <h2 className="text-2xl font-bold text-gray-900 mb-2">
                   {selectedOrganization.name}
                 </h2>
@@ -1032,319 +630,11 @@ export default function DepartmentsPage() {
         )}
       </Drawer>
 
-      {/* Add Bible Class Drawer */}
-      <Drawer
-        title="Add New Bible Class"
-        placement="right"
-        width={typeof window !== 'undefined' && window.innerWidth < 640 ? '100%' : 500}
-        open={showAddClassModal}
-        onClose={() => {
-          setShowAddClassModal(false);
-          setClassForm({
-            name: '',
-            leader: '',
-            status: 'Active',
-          });
-        }}
-      >
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            const newClass: Department = {
-              id: Math.max(...departments.map(d => d.id)) + 1,
-              name: classForm.name,
-              leader: classForm.leader,
-              members: 0,
-              status: classForm.status,
-              description: '',
-              type: 'class',
-            };
-            setDepartments((prev) => [...prev, newClass]);
-            setShowAddClassModal(false);
-            setClassForm({
-              name: '',
-              leader: '',
-              status: 'Active',
-            });
-          }}
-          className="space-y-4"
-        >
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Class Name *
-            </label>
-            <input
-              type="text"
-              required
-              value={classForm.name}
-              onChange={(e) => setClassForm({ ...classForm, name: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-              placeholder="e.g., Wesley Class, Love Class, Hope Class"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Class Leader *
-            </label>
-            <select
-              required
-              value={classForm.leader}
-              onChange={(e) => setClassForm({ ...classForm, leader: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-            >
-              <option value="">Select Leader</option>
-              <option>Thomas Anderson</option>
-              <option>Mary Johnson</option>
-              <option>James Wilson</option>
-              <option>Patricia Brown</option>
-              <option>Robert Taylor</option>
-              <option>David Brown</option>
-              <option>Sarah Williams</option>
-              <option>Jane Smith</option>
-              <option>Michael Johnson</option>
-              <option>Emily Davis</option>
-              <option>Linda Thompson</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Status *
-            </label>
-            <select
-              required
-              value={classForm.status}
-              onChange={(e) =>
-                setClassForm({ ...classForm, status: e.target.value as 'Active' | 'Inactive' })
-              }
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-            >
-              <option value="Active">Active</option>
-              <option value="Inactive">Inactive</option>
-            </select>
-          </div>
-          <div className="flex gap-3 pt-4 border-t border-gray-200">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                setShowAddClassModal(false);
-                setClassForm({
-                  name: '',
-                  leader: '',
-                  status: 'Active',
-                });
-              }}
-              className="flex-1"
-            >
-              Cancel
-            </Button>
-            <Button type="submit" className="flex-1">
-              Add Bible Class
-            </Button>
-          </div>
-        </form>
-      </Drawer>
-
-      {/* View Bible Class Modal */}
-      <Drawer
-        open={showViewClassModal}
-        onClose={() => {
-          setShowViewClassModal(false);
-          setSelectedClass(null);
-        }}
-        title="Bible Class Details"
-        placement="right"
-        width={typeof window !== 'undefined' && window.innerWidth < 640 ? '100%' : 600}
-      >
-        {selectedClass && (
-          <div className="p-4 sm:p-6">
-            <div className="mb-6">
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">
-                {selectedClass.name}
-              </h2>
-              <Tag color={selectedClass.status === 'Active' ? 'green' : 'default'} className="text-sm">
-                {selectedClass.status}
-              </Tag>
-            </div>
-
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <p className="text-sm text-gray-600 mb-1">Class Leader</p>
-                  <p className="text-base font-semibold text-gray-900 flex items-center gap-2">
-                    <HiUserGroup className="h-4 w-4 text-gray-500" />
-                    {selectedClass.leader}
-                  </p>
-                </div>
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <p className="text-sm text-gray-600 mb-1">Total Members</p>
-                  <p className="text-base font-semibold text-green-600 flex items-center gap-2">
-                    <HiOutlineUsers className="h-4 w-4 text-green-500" />
-                    {selectedClass.members}
-                  </p>
-                </div>
-              </div>
-
-              <div className="mt-4">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Members</h3>
-                <Table
-                  columns={[
-                    {
-                      title: 'Name',
-                      dataIndex: 'name',
-                      key: 'name',
-                      render: (text: string) => (
-                        <span className="text-sm font-medium text-gray-900">{text}</span>
-                      ),
-                    },
-                    {
-                      title: 'Contact',
-                      dataIndex: 'phone',
-                      key: 'phone',
-                      render: (text: string) => (
-                        <span className="text-sm text-gray-700">{text}</span>
-                      ),
-                    },
-                  ]}
-                  dataSource={classMembers[selectedClass.id] || []}
-                  rowKey={(record) => `class-member-${record.id}`}
-                  pagination={{
-                    pageSize: 10,
-                    showSizeChanger: true,
-                    showTotal: (total) => `Total ${total} members`,
-                  }}
-                />
-              </div>
-
-              <div className="pt-4 border-t border-gray-200 mt-4">
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setShowViewClassModal(false);
-                    setSelectedClass(null);
-                  }}
-                  className="w-full"
-                >
-                  Close
-                </Button>
-              </div>
-            </div>
-          </div>
-        )}
-      </Drawer>
-
-      {/* Manage Bible Class Drawer */}
-      <Drawer
-        title="Manage Bible Class"
-        placement="right"
-        width={typeof window !== 'undefined' && window.innerWidth < 640 ? '100%' : 500}
-        open={showManageClassModal}
-        onClose={() => {
-          setShowManageClassModal(false);
-          setManagingClass(null);
-        }}
-      >
-        {managingClass && (
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (managingClass) {
-                setDepartments((prev) =>
-                  prev.map((dept) =>
-                    dept.id === managingClass.id
-                      ? {
-                          ...dept,
-                          name: manageClassForm.name,
-                          leader: manageClassForm.leader,
-                          status: manageClassForm.status,
-                        }
-                      : dept
-                  )
-                );
-                setShowManageClassModal(false);
-                setManagingClass(null);
-              }
-            }}
-            className="space-y-4"
-          >
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Class Name *
-              </label>
-              <input
-                type="text"
-                required
-                value={manageClassForm.name}
-                onChange={(e) => setManageClassForm({ ...manageClassForm, name: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                placeholder="Class name"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Class Leader *
-              </label>
-              <select
-                required
-                value={manageClassForm.leader}
-                onChange={(e) => setManageClassForm({ ...manageClassForm, leader: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-              >
-                <option value="">Select Leader</option>
-                <option>Thomas Anderson</option>
-                <option>Mary Johnson</option>
-                <option>James Wilson</option>
-                <option>Patricia Brown</option>
-                <option>Robert Taylor</option>
-                <option>David Brown</option>
-                <option>Sarah Williams</option>
-                <option>Jane Smith</option>
-                <option>Michael Johnson</option>
-                <option>Emily Davis</option>
-                <option>Linda Thompson</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Status *
-              </label>
-              <select
-                required
-                value={manageClassForm.status}
-                onChange={(e) =>
-                  setManageClassForm({ ...manageClassForm, status: e.target.value as 'Active' | 'Inactive' })
-                }
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-              >
-                <option value="Active">Active</option>
-                <option value="Inactive">Inactive</option>
-              </select>
-            </div>
-            <div className="flex gap-3 pt-4 border-t border-gray-200">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => {
-                  setShowManageClassModal(false);
-                  setManagingClass(null);
-                }}
-                className="flex-1"
-              >
-                Cancel
-              </Button>
-              <Button type="submit" className="flex-1">
-                Update Bible Class
-              </Button>
-            </div>
-          </form>
-        )}
-      </Drawer>
-
-      {/* Create Organization/Class Modal */}
+      {/* Create Organization Modal */}
       <Drawer
         open={showModal}
         onClose={() => setShowModal(false)}
-        title="Create New Organization/Class"
+        title="Create New Organization"
         placement="right"
         width={typeof window !== 'undefined' && window.innerWidth < 640 ? '100%' : 600}
       >
@@ -1352,12 +642,12 @@ export default function DepartmentsPage() {
           <form className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Organization/Class Name *
+                Organization Name *
               </label>
               <input
                 type="text"
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                placeholder="e.g., Choir, Ushers, Youth, Wesley Class, Love Class"
+                placeholder="e.g., Choir, Ushers, Youth"
               />
             </div>
             <div>
@@ -1367,7 +657,7 @@ export default function DepartmentsPage() {
               <textarea
                 rows={3}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                placeholder="Organization/class description and purpose..."
+                placeholder="Organization description and purpose..."
               />
             </div>
             <div>
@@ -1402,7 +692,7 @@ export default function DepartmentsPage() {
                 Cancel
               </Button>
               <Button type="submit" className="flex-1">
-                Create Organization/Class
+                Create Organization
               </Button>
             </div>
           </form>

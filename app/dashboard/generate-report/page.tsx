@@ -276,7 +276,7 @@ export default function GenerateReportPage() {
           <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
             Generate Financial Report
           </h1>
-          <p className="text-gray-600 mt-1">Generate comprehensive financial reports for your church</p>
+          <p className="text-gray-600 mt-1">Generate comprehensive financial reports for your parish</p>
         </div>
         <div className="flex gap-3">
           <Button variant="outline" className="shadow-lg no-print">

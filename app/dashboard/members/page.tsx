@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import {
   HiOutlineUsers,
   HiUserAdd,
@@ -76,7 +76,6 @@ interface Member {
   confirmationPlace?: string;
   organisations?: string[]; // Array of selected organisations
   otherOrganisation?: string;
-  classes?: string[]; // Array of classes (e.g., wesley, love, etc.)
   occupation?: string;
   placeOfWork?: string;
   skillsTalents?: string;
@@ -97,7 +96,15 @@ export default function MembersPage() {
   const [form] = Form.useForm();
   const [profileImagePreview, setProfileImagePreview] = useState<string | null>(null);
   const [fileList, setFileList] = useState<UploadFile[]>([]);
-  
+  const drawerBodyRef = useRef<HTMLDivElement>(null);
+
+  // Scroll drawer content to top when step changes so the current step is visible
+  useEffect(() => {
+    if (showModal && drawerBodyRef.current) {
+      drawerBodyRef.current.scrollTop = 0;
+    }
+  }, [currentStep, showModal]);
+
   // Function to generate unique church number
   const generateChurchNumber = (existingMembers: Member[]): string => {
     // Find the highest existing church number
@@ -146,12 +153,11 @@ export default function MembersPage() {
       transferredFromAnotherSociety: false,
       baptised: true,
       baptismDate: '2005-06-15',
-      baptismPlace: 'Methodist Church, Adenta',
+      baptismPlace: 'St Joseph Catholic Church, Adenta',
       confirmed: true,
       confirmationDate: '2007-08-20',
-      confirmationPlace: 'Methodist Church, Adenta',
+      confirmationPlace: 'St Joseph Catholic Church, Adenta',
       organisations: ['Choir'],
-      classes: ['Wesley'],
       occupation: 'Teacher',
       placeOfWork: 'Adenta  Basic School',
       skillsTalents: 'Singing, Teaching, Piano',
@@ -187,12 +193,11 @@ export default function MembersPage() {
       transferredFromAnotherSociety: false,
       baptised: true,
       baptismDate: '2010-04-10',
-      baptismPlace: 'Methodist Church, Tema',
+      baptismPlace: 'St Joseph Catholic Church, Tema',
       confirmed: true,
       confirmationDate: '2012-05-15',
-      confirmationPlace: 'Methodist Church, Tema',
+      confirmationPlace: 'St Joseph Catholic Church, Tema',
       organisations: ['Ushers', "Women's Fellowship"],
-      classes: ['Love'],
       occupation: 'Nurse',
       placeOfWork: 'Tema General Hospital',
       skillsTalents: 'Nursing, First Aid, Counseling',
@@ -226,15 +231,14 @@ export default function MembersPage() {
       membershipStatus: 'Adherent',
       dateJoinedSociety: '2021-03-10',
       transferredFromAnotherSociety: true,
-      formerSocietyName: 'Presbyterian Church, Sunyani',
+      formerSocietyName: 'Sacred Heart Catholic Church, Sunyani',
       baptised: true,
       baptismDate: '1998-07-22',
-      baptismPlace: 'Presbyterian Church, Sunyani',
+      baptismPlace: 'Sacred Heart Catholic Church, Sunyani',
       confirmed: true,
       confirmationDate: '2000-09-10',
-      confirmationPlace: 'Presbyterian Church, Sunyani',
+      confirmationPlace: 'Sacred Heart Catholic Church, Sunyani',
       organisations: ['Youth Fellowship'],
-      classes: ['Wesley'],
       occupation: 'Engineer',
       placeOfWork: 'Ghana Water Company Limited',
       skillsTalents: 'Engineering, IT, Leadership',
@@ -270,12 +274,11 @@ export default function MembersPage() {
       transferredFromAnotherSociety: false,
       baptised: true,
       baptismDate: '2008-12-05',
-      baptismPlace: 'Methodist Church, Tamale',
+      baptismPlace: 'St Joseph Catholic Church, Tamale',
       confirmed: true,
       confirmationDate: '2010-03-18',
-      confirmationPlace: 'Methodist Church, Tamale',
+      confirmationPlace: 'St Joseph Catholic Church, Tamale',
       organisations: ["Women's Fellowship"],
-      classes: ['Love'],
       occupation: 'Accountant',
       placeOfWork: 'Ernst & Young Ghana',
       skillsTalents: 'Accounting, Financial Planning, Event Planning',
@@ -312,9 +315,8 @@ export default function MembersPage() {
       baptised: false,
       confirmed: false,
       organisations: ['Children'],
-      classes: ['Love'],
       occupation: 'Student',
-      placeOfWork: 'Dansoman Methodist Basic School',
+      placeOfWork: 'St Joseph Catholic School, Dansoman',
       skillsTalents: 'Singing, Dancing, Drawing',
       nextOfKinName: 'Kwame Boateng',
       nextOfKinRelationship: 'Father',
@@ -348,12 +350,11 @@ export default function MembersPage() {
       transferredFromAnotherSociety: false,
       baptised: true,
       baptismDate: '1992-10-12',
-      baptismPlace: 'Methodist Church, Takoradi',
+      baptismPlace: 'St Joseph Catholic Church, Takoradi',
       confirmed: true,
       confirmationDate: '1994-11-20',
-      confirmationPlace: 'Methodist Church, Takoradi',
+      confirmationPlace: 'St Joseph Catholic Church, Takoradi',
       organisations: ["Men's Fellowship"],
-      classes: ['Wesley'],
       occupation: 'Businessman',
       placeOfWork: 'Appiah Trading Company',
       skillsTalents: 'Business Management, Public Speaking, Mentoring',
@@ -367,14 +368,12 @@ export default function MembersPage() {
   const filteredMembers = members.filter((member) => {
     const searchLower = searchTerm.toLowerCase();
     const orgsMatch = member.organisations?.some(org => org.toLowerCase().includes(searchLower)) || false;
-    const classesMatch = member.classes?.some(cls => cls.toLowerCase().includes(searchLower)) || false;
     return (
       member.name.toLowerCase().includes(searchLower) ||
       member.email.toLowerCase().includes(searchLower) ||
       member.department.toLowerCase().includes(searchLower) ||
       member.churchNumber?.toLowerCase().includes(searchLower) ||
-      orgsMatch ||
-      classesMatch
+      orgsMatch
     );
   });
 
@@ -420,7 +419,7 @@ export default function MembersPage() {
   // Define table columns
   const columns: ColumnsType<Member> = [
     {
-      title: 'Church Number',
+      title: 'Parish Number',
       dataIndex: 'churchNumber',
       key: 'churchNumber',
       width: 120,
@@ -464,21 +463,17 @@ export default function MembersPage() {
       },
     },
     {
-      title: 'Organizations / Class',
-      key: 'organizations-class',
+      title: 'Organizations',
+      key: 'organisations',
       render: (_, record: Member) => {
         const orgs = record.organisations || [];
-        const classes = record.classes || [];
-        const allItems = [...orgs, ...classes];
-        
-        if (allItems.length === 0) {
+        if (orgs.length === 0) {
           return <Tag color="default">None</Tag>;
         }
-        
         return (
           <div className="flex flex-wrap gap-1">
-            {allItems.map((item, idx) => (
-              <Tag key={idx} color={orgs.includes(item) ? 'blue' : 'purple'}>
+            {orgs.map((item, idx) => (
+              <Tag key={idx} color="blue">
                 {item}
               </Tag>
             ))}
@@ -530,7 +525,7 @@ export default function MembersPage() {
           <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
             Member Management
           </h1>
-          <p className="text-sm sm:text-base text-gray-600 mt-1">Manage church members and their information</p>
+          <p className="text-sm sm:text-base text-gray-600 mt-1">Manage parish members and their information</p>
         </div>
         {!hasRole('head_pastor') && (
           <Button onClick={() => setShowModal(true)} className="shadow-lg w-full sm:w-auto">
@@ -573,7 +568,7 @@ export default function MembersPage() {
           <div className="space-y-3 sm:space-y-0">
             <div className="w-full">
               <Input
-                placeholder="Search by name, church number, email..."
+                placeholder="Search by name, parish number, email..."
                 prefix={<SearchOutlined />}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -583,18 +578,19 @@ export default function MembersPage() {
             </div>
             <div className="flex flex-col sm:flex-row gap-2 sm:gap-2">
               <Select
-                defaultValue="All Organizations / Classes"
+                defaultValue="All Organizations"
                 className="w-full sm:w-auto sm:flex-1"
                 size="large"
                 options={[
-                  { value: 'all', label: 'All Organizations / Classes' },
+                  { value: 'all', label: 'All Organizations' },
+                  { value: 'cma', label: 'Christian Mothers Association' },
+                  { value: 'ksji', label: 'Knights of St. John International (KSJI)' },
+                  { value: 'marshall', label: 'Knights and Ladies of Marshall' },
+                  { value: 'cyo', label: 'Catholic Youth Organization (CYO)' },
+                  { value: 'legion', label: 'Legion of Mary' },
                   { value: 'choir', label: 'Choir' },
-                  { value: 'ushers', label: 'Ushers' },
-                  { value: 'youth', label: 'Youth' },
-                  { value: 'mens', label: 'Men\'s Fellowship' },
-                  { value: 'womens', label: 'Women\'s Fellowship' },
-                  { value: 'wesley', label: 'Wesley Class' },
-                  { value: 'love', label: 'Love Class' },
+                  { value: 'altar', label: 'Altar Servers' },
+                  { value: 'lectors', label: 'Lectors' },
                 ]}
               />
               <Select
@@ -671,15 +667,20 @@ export default function MembersPage() {
         }}
         open={showModal}
         styles={{
-          body: { padding: '16px sm:24px' },
+          body: { padding: '16px sm:24px', display: 'flex', flexDirection: 'column', overflow: 'hidden' },
         }}
       >
+          <div
+            ref={drawerBodyRef}
+            className="flex-1 overflow-y-auto min-h-0 pr-2 -mr-2"
+            style={{ paddingRight: '8px', marginRight: '-8px' }}
+          >
           <Steps
             current={currentStep}
             items={[
               { title: 'Personal Information' },
-            { title: 'Contact & Membership' },
-            { title: 'Organisation & Details' },
+              { title: 'Organisation & Details' },
+              { title: 'Contact & Membership' },
             ]}
             className="mb-8"
           />
@@ -717,7 +718,6 @@ export default function MembersPage() {
 
             // Get primary department from organisations (use first one or combine)
             const organisations = values.organisations || [];
-            const classes = values.classes || [];
             const primaryDepartment = organisations.length > 0 
               ? organisations[0] 
               : 'None';
@@ -767,7 +767,6 @@ export default function MembersPage() {
               confirmationPlace: values.confirmationPlace,
               organisations: organisations,
               otherOrganisation: values.otherOrganisation,
-              classes: classes,
               occupation: values.occupation,
               placeOfWork: values.placeOfWork,
               skillsTalents: values.skillsTalents,
@@ -947,8 +946,8 @@ export default function MembersPage() {
               </div>
             )}
 
-            {/* Step 2: Contact & Membership */}
-            {currentStep === 1 && (
+            {/* Step 3: Contact & Membership */}
+            {currentStep === 2 && (
               <div className="space-y-6">
                 <div>
                   <h4 className="text-base font-semibold text-gray-900 mb-4">CONTACT DETAILS</h4>
@@ -1140,9 +1139,9 @@ export default function MembersPage() {
               </div>
             )}
 
-            {/* Step 3: Organisation & Details */}
-            {currentStep === 2 && (
-              <div className="space-y-6">
+            {/* Step 2: Organisation & Details */}
+            {currentStep === 1 && (
+              <div key="step-2" className="space-y-6">
                 <div>
                   <h4 className="text-base font-semibold text-gray-900 mb-4">SOCIETY & ORGANISATION MEMBERSHIP</h4>
                       <Form.Item
@@ -1151,12 +1150,14 @@ export default function MembersPage() {
                   >
                     <Checkbox.Group className="w-full">
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <Checkbox value="Men's Fellowship">Men's Fellowship</Checkbox>
-                        <Checkbox value="Women's Fellowship">Women's Fellowship</Checkbox>
-                        <Checkbox value="Youth Fellowship">Youth Fellowship</Checkbox>
-                        <Checkbox value="Singing Band">Singing Band</Checkbox>
+                        <Checkbox value="Christian Mothers Association">Christian Mothers Association</Checkbox>
+                        <Checkbox value="Knights of St. John International (KSJI)">Knights of St. John International (KSJI)</Checkbox>
+                        <Checkbox value="Knights and Ladies of Marshall">Knights and Ladies of Marshall</Checkbox>
+                        <Checkbox value="Catholic Youth Organization (CYO)">Catholic Youth Organization (CYO)</Checkbox>
+                        <Checkbox value="Legion of Mary">Legion of Mary</Checkbox>
                         <Checkbox value="Choir">Choir</Checkbox>
-                        <Checkbox value="Bible Society">Bible Society</Checkbox>
+                        <Checkbox value="Altar Servers">Altar Servers</Checkbox>
+                        <Checkbox value="Lectors">Lectors</Checkbox>
                         <Checkbox value="Others">Others</Checkbox>
                       </div>
                     </Checkbox.Group>
@@ -1183,22 +1184,7 @@ export default function MembersPage() {
                     }}
                   </Form.Item>
 
-                  <Form.Item
-                    label="Class(es) you belong to (tick all that apply)"
-                    name="classes"
-                  >
-                    <Checkbox.Group className="w-full">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <Checkbox value="Wesley">Wesley</Checkbox>
-                        <Checkbox value="Love">Love</Checkbox>
-                        <Checkbox value="Hope">Hope</Checkbox>
-                        <Checkbox value="Faith">Faith</Checkbox>
-                        <Checkbox value="Grace">Grace</Checkbox>
-                        <Checkbox value="Peace">Peace</Checkbox>
-                      </div>
-                    </Checkbox.Group>
-                  </Form.Item>
-                </div>
+                  </div>
 
                 <div className="border-t pt-4">
                   <h4 className="text-base font-semibold text-gray-900 mb-4">OCCUPATION & SKILLS (OPTIONAL)</h4>
@@ -1304,6 +1290,7 @@ export default function MembersPage() {
 )}
             </div>
           </Form>
+          </div>
       </Drawer>
 
       {/* Member Detail Drawer */}
@@ -1368,14 +1355,7 @@ export default function MembersPage() {
                         {selectedMember.department}
                       </Tag>
                     )}
-                    {selectedMember.classes && selectedMember.classes.length > 0 && (
-                      selectedMember.classes.map((cls, idx) => (
-                        <Tag key={idx} color="orange" className="text-xs px-3 py-1">
-                          {cls}
-                        </Tag>
-                      ))
-                    )}
-                  </div>
+                    </div>
                 </div>
               </div>
             </div>
@@ -1390,7 +1370,7 @@ export default function MembersPage() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  <InfoRow label="Church Number" value={selectedMember.churchNumber} />
+                  <InfoRow label="Parish Number" value={selectedMember.churchNumber} />
                   <InfoRow label="Surname" value={selectedMember.surname} />
                   <InfoRow label="Other Names" value={selectedMember.otherNames} />
                   <InfoRow 
@@ -1460,20 +1440,6 @@ export default function MembersPage() {
                         selectedMember.organisations.map((org, idx) => (
                           <Tag key={idx} color="cyan" className="text-xs">
                             {org}
-                          </Tag>
-                        ))
-                      ) : (
-                        <span className="text-sm font-medium text-gray-400">-</span>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex justify-between items-start py-2 border-b border-gray-100">
-                    <span className="text-sm text-gray-600">Classes</span>
-                    <div className="flex flex-wrap gap-2 max-w-[60%] justify-end">
-                      {selectedMember.classes && selectedMember.classes.length > 0 ? (
-                        selectedMember.classes.map((cls, idx) => (
-                          <Tag key={idx} color="purple" className="text-xs">
-                            {cls}
                           </Tag>
                         ))
                       ) : (

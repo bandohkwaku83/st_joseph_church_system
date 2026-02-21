@@ -46,9 +46,9 @@ interface ExpenditureEntry {
 }
 
 export default function Dashboard() {
-  const { user } = useAuth();
-  const isAdmin = user?.role === 'church_admin';
-  const isFinanceOfficer = user?.role === 'finance_officer';
+  const { user, hasRole } = useAuth();
+  const isAdmin = hasRole('church_admin');
+  const isFinanceOfficer = hasRole('finance_officer');
 
   // Financial data for finance officers
   const [incomeEntries] = useState<IncomeEntry[]>([
@@ -222,7 +222,7 @@ export default function Dashboard() {
         id: 1,
         type: 'member',
         title: 'New member registered',
-        description: 'John Doe joined the church',
+        description: 'John Doe joined the parish',
         time: '2 hours ago',
         icon: HiOutlineUsers,
         color: 'text-blue-600',
@@ -300,7 +300,7 @@ export default function Dashboard() {
             Welcome back, {user?.name || 'Admin'}!
           </h1>
           <p className="text-sm sm:text-base text-gray-600 mt-1">
-            Here's an overview of your church administration
+            Here's an overview of your parish administration
           </p>
         </div>
 
@@ -594,7 +594,7 @@ export default function Dashboard() {
             <CardContent className="p-6 relative z-10">
               <div className="mb-4">
                 <CardTitle className="text-base font-semibold text-white mb-2">Quick Actions</CardTitle>
-                <p className="text-xs text-green-50">Manage your church finances efficiently with quick access to key functions.</p>
+                <p className="text-xs text-green-50">Manage your parish finances efficiently with quick access to key functions.</p>
               </div>
               <div className="space-y-2">
                 <Link href="/dashboard/generate-report">
@@ -662,7 +662,7 @@ export default function Dashboard() {
   }
 
   // Executive Dashboard for Head Pastor
-  const isHeadPastor = user?.role === 'head_pastor';
+  const isHeadPastor = hasRole('head_pastor');
   
   if (isHeadPastor) {
     // Sample data for head pastor dashboard
@@ -699,7 +699,6 @@ export default function Dashboard() {
       },
       organizations: {
         total: 11,
-        classes: 5,
         activeLeaders: 16,
       },
     };
@@ -721,7 +720,7 @@ export default function Dashboard() {
       id: 2,
       type: 'member',
       title: 'New member registered',
-      description: 'John Doe joined the church',
+      description: 'John Doe joined the parish',
       time: '1 day ago',
       icon: HiOutlineUsers,
       color: 'text-blue-600',
@@ -800,7 +799,7 @@ export default function Dashboard() {
     {
       title: 'Organizations',
       value: executiveStats.organizations.total.toString(),
-      subtitle: `${executiveStats.organizations.classes} Bible Classes`,
+      subtitle: 'Organizations',
       change: `${executiveStats.organizations.activeLeaders} active leaders`,
       trend: 'neutral' as const,
       icon: HiOutlineOfficeBuilding,
@@ -818,7 +817,7 @@ export default function Dashboard() {
           Welcome, {user?.name || 'User'}!
         </h1>
         <p className="text-sm sm:text-base text-gray-600 mt-1">
-          Executive overview of church operations and key metrics
+          Executive overview of parish operations and key metrics
         </p>
       </div>
 
@@ -1121,7 +1120,7 @@ export default function Dashboard() {
       </div>
       <Card>
         <CardContent className="p-6">
-          <p className="text-gray-600">Dashboard content for {user?.role}</p>
+          <p className="text-gray-600">Dashboard content for {user?.roleName}</p>
         </CardContent>
       </Card>
     </div>

@@ -47,7 +47,7 @@ export default function AssetsPage() {
     },
     {
       id: 3,
-      name: 'Church Chairs',
+      name: 'Parish Chairs',
       category: 'Furniture',
       code: 'AST-003',
       quantity: 200,
@@ -276,7 +276,7 @@ export default function AssetsPage() {
           <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
             Assets/Equipment
           </h1>
-          <p className="text-gray-600 mt-1">Manage church assets and equipment</p>
+          <p className="text-gray-600 mt-1">Manage parish assets and equipment</p>
         </div>
         <Button onClick={() => setShowAddModal(true)} className="shadow-lg">
           <PlusOutlined className="mr-2" />

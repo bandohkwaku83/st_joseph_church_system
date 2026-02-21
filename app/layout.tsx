@@ -10,8 +10,8 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Church Administration System",
-  description: "Comprehensive church management system for members, attendance, finance, and more",
+  title: "St Joseph Catholic Church – Administration",
+  description: "Parish management system for St Joseph Catholic Church – members, attendance, finance, and more",
 };
 
 export default function RootLayout({

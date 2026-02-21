@@ -361,7 +361,7 @@ export default function FinancePage() {
       ],
       'Payroll & Allowances': [
         'Ministers\' stipends',
-        'Catechists / Church workers salaries',
+        'Catechists / Parish workers salaries',
         'Allowances (housing, transport, fuel)',
         'SSNIT contributions (where applicable)',
         'Other payroll expenses',

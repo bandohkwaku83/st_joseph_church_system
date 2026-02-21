@@ -421,7 +421,7 @@ export default function TithesPage() {
                   <div className="mb-2">Received By:</div>
                   <div className="border-t border-black pt-1 mt-6">
                     <div className="font-semibold">Authorized Signature</div>
-                    <div>Church Treasurer</div>
+                    <div>Parish Treasurer</div>
                   </div>
                 </div>
                 <div>

@@ -7,10 +7,8 @@ import {
   HiOutlineHome,
   HiOutlineUsers,
   HiOutlineClipboardCheck,
-  HiOutlineCurrencyDollar,
   HiOutlineChatAlt,
   HiOutlineOfficeBuilding,
-  HiOutlineChartBar,
   HiMenu,
   HiOutlineBell,
   HiX,
@@ -18,32 +16,36 @@ import {
   HiOutlineLogout,
   HiPlus,
   HiClipboardList,
-  HiDocumentText,
   HiReceiptRefund,
   HiMinus,
   HiOutlineCube,
+  HiOutlineUserAdd,
 } from 'react-icons/hi';
 import { cn } from '@/lib/utils';
-import { useAuth, UserRole } from '@/lib/auth-context';
+import { useAuth } from '@/lib/auth-context';
+import type { PermissionKey } from '@/lib/rbac';
+import { HEAD_PASTOR_ROLE_ID } from '@/lib/rbac';
 
 interface NavItem {
   name: string;
   href: string;
   icon: React.ComponentType<{ className?: string }>;
-  roles: UserRole[];
+  /** Single permission or array (show if user has any of them) */
+  permission: PermissionKey | PermissionKey[];
 }
 
 const allNavigation: NavItem[] = [
-  { name: 'Dashboard', href: '/dashboard', icon: HiOutlineHome, roles: ['finance_officer', 'church_admin', 'head_pastor'] },
-  { name: 'Members', href: '/dashboard/members', icon: HiOutlineUsers, roles: ['church_admin', 'head_pastor'] },
-  { name: 'Attendance', href: '/dashboard/attendance', icon: HiOutlineClipboardCheck, roles: ['church_admin', 'head_pastor'] },
-  { name: 'Record Income', href: '/dashboard/record-income', icon: HiPlus, roles: ['finance_officer', 'head_pastor'] },
-  { name: 'Expenditure', href: '/dashboard/expenditure', icon: HiMinus, roles: ['finance_officer', 'head_pastor'] },
-  { name: 'Generate Report', href: '/dashboard/generate-report', icon: HiClipboardList, roles: ['finance_officer', 'head_pastor'] },
-  { name: 'Tithes', href: '/dashboard/tithes', icon: HiReceiptRefund, roles: ['finance_officer', 'head_pastor'] },
-  { name: 'Communication', href: '/dashboard/communication', icon: HiOutlineChatAlt, roles: ['church_admin', 'head_pastor'] },
-  { name: 'Organizations/Classes', href: '/dashboard/departments', icon: HiOutlineOfficeBuilding, roles: ['church_admin', 'head_pastor'] },
-  { name: 'Assets/Equipment', href: '/dashboard/assets', icon: HiOutlineCube, roles: ['church_admin'] },
+  { name: 'Dashboard', href: '/dashboard', icon: HiOutlineHome, permission: 'dashboard' },
+  { name: 'Members', href: '/dashboard/members', icon: HiOutlineUsers, permission: 'members' },
+  { name: 'Attendance', href: '/dashboard/attendance', icon: HiOutlineClipboardCheck, permission: 'attendance' },
+  { name: 'Record Income', href: '/dashboard/record-income', icon: HiPlus, permission: 'record_income' },
+  { name: 'Expenditure', href: '/dashboard/expenditure', icon: HiMinus, permission: 'expenditure' },
+  { name: 'Generate Report', href: '/dashboard/generate-report', icon: HiClipboardList, permission: 'generate_report' },
+  { name: 'Tithes', href: '/dashboard/tithes', icon: HiReceiptRefund, permission: 'tithes' },
+  { name: 'Communication', href: '/dashboard/communication', icon: HiOutlineChatAlt, permission: 'communication' },
+  { name: 'Organizations', href: '/dashboard/departments', icon: HiOutlineOfficeBuilding, permission: 'departments' },
+  { name: 'Assets/Equipment', href: '/dashboard/assets', icon: HiOutlineCube, permission: 'assets' },
+  { name: 'Add User', href: '/dashboard/users-and-roles', icon: HiOutlineUserAdd, permission: ['add_users', 'manage_roles'] },
 ];
 
 export default function DashboardLayout({
@@ -53,7 +55,7 @@ export default function DashboardLayout({
 }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, logout, isAuthenticated } = useAuth();
+  const { user, logout, isAuthenticated, hasPermission } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
@@ -64,10 +66,13 @@ export default function DashboardLayout({
     }
   }, [isAuthenticated, router]);
 
-  // Filter navigation based on user role
+  // Strict RBAC: only show menus the user has permission for. Head Pastor always sees Add User.
   const navigation = allNavigation.filter((item) => {
-    if (!user) return false;
-    return item.roles.includes(user.role);
+    const p = item.permission;
+    const hasAccess = Array.isArray(p) ? p.some((key) => hasPermission(key)) : hasPermission(p);
+    const isAddUserItem = Array.isArray(p) && p.includes('add_users') && p.includes('manage_roles');
+    const isHeadPastor = user?.roleId === HEAD_PASTOR_ROLE_ID;
+    return hasAccess || (isAddUserItem && isHeadPastor);
   });
 
   if (!isAuthenticated || !user) {
@@ -94,19 +99,20 @@ export default function DashboardLayout({
         {/* Logo */}
         <div className="h-16 flex items-center justify-between px-4 border-b border-gray-200">
           {sidebarOpen && (
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 min-w-0">
               <img 
                 src="/images/logos/logo.png" 
-                alt="Church Logo" 
-                className="w-8 h-8 object-contain"
+                alt="St Joseph Catholic Church" 
+                className="w-8 h-8 object-contain flex-shrink-0"
               />
+              <span className="text-sm font-semibold text-gray-900 truncate">St Joseph Catholic Church</span>
             </div>
           )}
           {!sidebarOpen && (
             <div className="w-8 h-8 flex items-center justify-center mx-auto">
               <img 
                 src="/images/logos/logo.png" 
-                alt="Church Logo" 
+                alt="St Joseph Catholic Church" 
                 className="w-8 h-8 object-contain"
               />
             </div>
@@ -181,8 +187,8 @@ export default function DashboardLayout({
             <div className="flex items-center gap-2 md:gap-3 pl-2 md:pl-3 border-l border-gray-200">
               <div className="hidden md:block text-right">
                 <span className="block text-xs md:text-sm font-medium text-gray-900 truncate max-w-[100px] lg:max-w-none">{user.name}</span>
-                <span className="block text-xs text-gray-500 capitalize">
-                  {user.role.replace('_', ' ')}
+                <span className="block text-xs text-gray-500">
+                  {user.roleName}
                 </span>
               </div>
               <div className="w-7 h-7 md:w-8 md:h-8 rounded-full bg-green-600 flex items-center justify-center text-white font-semibold text-xs md:text-sm">
@@ -208,10 +214,10 @@ export default function DashboardLayout({
                   <div className="flex items-center gap-3">
                     <img 
                       src="/images/logos/logo.png" 
-                      alt="Church Logo" 
+                      alt="St Joseph Catholic Church" 
                       className="w-8 h-8 object-contain"
                     />
-                    <span className="text-lg font-semibold text-gray-900">Menu</span>
+                    <span className="text-lg font-semibold text-gray-900">St Joseph Catholic Church</span>
                   </div>
                   <button
                     onClick={() => setMobileMenuOpen(false)}
@@ -228,7 +234,7 @@ export default function DashboardLayout({
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-gray-900 truncate">{user.name}</p>
-                        <p className="text-xs text-gray-500 capitalize">{user.role.replace('_', ' ')}</p>
+                        <p className="text-xs text-gray-500">{user.roleName}</p>
                       </div>
                     </div>
                     <button

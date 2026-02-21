@@ -2,6 +2,8 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 ## Getting Started
 
+**Important:** Always run `npm run dev` and `npm run build` from this project’s root directory (`church_administration_system_v3`). If your terminal is in a parent folder (e.g. `Documents/projects`), run `cd church_administration_system_v3` first. Running from the wrong directory causes errors like "Can't resolve 'tailwindcss'".
+
 First, run the development server:
 
 ```bash
