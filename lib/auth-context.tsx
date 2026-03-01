@@ -6,6 +6,7 @@ import {
   useState,
   useEffect,
   useCallback,
+  useMemo,
   ReactNode,
 } from 'react';
 import { useRouter } from 'next/navigation';
@@ -19,6 +20,12 @@ import {
   HEAD_PASTOR_ROLE_ID,
   ALL_PERMISSION_KEYS,
 } from '@/lib/rbac';
+import { apiFetch } from '@/lib/api';
+
+/** Local-only auth: pastor (admin) login credentials */
+const PASTOR_USERNAME = 'testPastor';
+const PASTOR_PASSWORD = 'poster123';
+const AUTH_SESSION_KEY = 'church_auth_session';
 
 /** Current user (no password); roleName resolved for display */
 export interface User {
@@ -40,12 +47,25 @@ export interface UserSummary {
   initials: string;
 }
 
+/** Backend API user shape (used for users list when backend is present) */
+interface BackendUser {
+  id: string;
+  username: string;
+  name: string;
+  role: 'admin' | 'user';
+  roleId?: string;
+  email?: string;
+  initials?: string;
+}
+
 interface AuthContextType {
   user: User | null;
   roles: Role[];
   users: StoredUser[];
-  login: (email: string, password: string) => Promise<boolean>;
-  logout: () => void;
+  /** True while restoring session on load */
+  authLoading: boolean;
+  login: (username: string, password: string) => Promise<boolean>;
+  logout: () => Promise<void>;
   isAuthenticated: boolean;
   hasPermission: (key: PermissionKey) => boolean;
   hasRole: (roleId: string) => boolean;
@@ -56,14 +76,10 @@ interface AuthContextType {
   addRole: (role: Role) => void;
   updateRole: (role: Role) => void;
   deleteRole: (id: string) => boolean;
-  addUser: (u: StoredUser) => void;
-  updateUser: (u: StoredUser) => void;
-  deleteUser: (id: string) => void;
+  addUser: (u: StoredUser) => Promise<void>;
+  updateUser: (u: StoredUser) => Promise<void>;
+  deleteUser: (id: string) => Promise<void>;
   refreshRolesAndUsers: () => void;
-  /** True when no users exist – show "Create first administrator" on signin */
-  needsBootstrap: boolean;
-  /** Create first admin (role + user) and log in. Only when needsBootstrap. */
-  bootstrapFirstAdmin: (name: string, email: string, password: string) => boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -74,7 +90,16 @@ function loadRoles(): Role[] {
     const raw = localStorage.getItem(STORAGE_KEYS.ROLES);
     if (raw) {
       const parsed = JSON.parse(raw) as Role[];
-      if (Array.isArray(parsed)) return parsed;
+      if (Array.isArray(parsed)) {
+        const defaults = getDefaultRoles();
+        const missing = defaults.filter((d) => !parsed.some((p) => p.id === d.id));
+        if (missing.length > 0) {
+          const merged = [...parsed, ...missing];
+          localStorage.setItem(STORAGE_KEYS.ROLES, JSON.stringify(merged));
+          return merged;
+        }
+        return parsed;
+      }
     }
   } catch (_) {}
   const defaultRoles = getDefaultRoles();
@@ -112,64 +137,144 @@ function storedUserToUser(u: StoredUser, roles: Role[]): User {
   };
 }
 
+function backendUserToUser(b: BackendUser): User {
+  const roles = getDefaultRoles();
+  const roleId =
+    b.roleId ?? (b.role === 'admin' ? HEAD_PASTOR_ROLE_ID : 'role_church_admin');
+  const role = roles.find((r) => r.id === roleId);
+  const initials =
+    b.initials ??
+    (b.name.trim().split(/\s+/).length >= 2
+      ? (b.name.trim().split(/\s+/)[0][0] +
+          b.name.trim().split(/\s+/).pop()![0]).toUpperCase()
+      : b.name.slice(0, 2).toUpperCase() || b.username.slice(0, 2).toUpperCase());
+  return {
+    id: b.id,
+    name: b.name,
+    email: b.email ?? b.username,
+    roleId,
+    roleName: role?.name ?? (b.role === 'admin' ? 'Head Pastor' : 'User'),
+    initials,
+  };
+}
+
+/** Local pastor user for admin login (no backend). */
+function getPastorUser(): User {
+  const roles = getDefaultRoles();
+  const role = roles.find((r) => r.id === HEAD_PASTOR_ROLE_ID);
+  return {
+    id: 'pastor-1',
+    name: 'Pastor',
+    email: PASTOR_USERNAME,
+    roleId: HEAD_PASTOR_ROLE_ID,
+    roleName: role?.name ?? 'Head Pastor',
+    initials: 'TP',
+  };
+}
+
+function normalizeBackendUser(data: unknown): BackendUser | null {
+  if (!data || typeof data !== 'object') return null;
+  const o = data as Record<string, unknown>;
+  const user = (o.user as BackendUser) ?? (o as unknown as BackendUser);
+  if (
+    typeof user?.id === 'string' &&
+    typeof user?.username === 'string' &&
+    typeof user?.name === 'string'
+  ) {
+    return {
+      id: user.id,
+      username: user.username,
+      name: user.name,
+      role: user.role === 'user' ? 'user' : 'admin',
+      roleId: typeof user.roleId === 'string' ? user.roleId : undefined,
+      email: typeof user.email === 'string' ? user.email : undefined,
+      initials: typeof user.initials === 'string' ? user.initials : undefined,
+    };
+  }
+  return null;
+}
+
+function normalizeBackendUsersList(data: unknown): BackendUser[] {
+  if (!data || typeof data !== 'object') return [];
+  const o = data as Record<string, unknown>;
+  const list = o.users;
+  if (!Array.isArray(list)) return [];
+  return list
+    .map((item) => normalizeBackendUser(item))
+    .filter((u): u is BackendUser => u !== null);
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
   const [roles, setRoles] = useState<Role[]>([]);
-  const [users, setUsers] = useState<StoredUser[]>([]);
+  const [backendUsers, setBackendUsers] = useState<BackendUser[]>([]);
   const router = useRouter();
+
+  const fetchUsers = useCallback(async () => {
+    const res = await apiFetch('/api/users');
+    if (res.status === 401) {
+      setUser(null);
+      return;
+    }
+    if (!res.ok) return;
+    const data = await res.json();
+    setBackendUsers(normalizeBackendUsersList(data));
+  }, []);
 
   const refreshRolesAndUsers = useCallback(() => {
     setRoles(loadRoles());
-    setUsers(loadUsers());
-  }, []);
+    void fetchUsers();
+  }, [fetchUsers]);
 
   useEffect(() => {
     setRoles(loadRoles());
-    setUsers(loadUsers());
   }, []);
 
+  // Restore session from localStorage (no backend)
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const stored = localStorage.getItem('church_admin_user');
-    if (!stored) return;
-    try {
-      const parsed = JSON.parse(stored) as User;
-      if (parsed?.id && parsed?.roleId) {
-        const rolesList = loadRoles();
-        const usersList = loadUsers();
-        const found = usersList.find((u) => u.id === parsed.id);
-        if (found) {
-          setUser(storedUserToUser(found, rolesList));
-          return;
-        }
-      }
-    } catch (_) {}
-    localStorage.removeItem('church_admin_user');
-  }, [roles]);
+    if (typeof window === 'undefined') {
+      setAuthLoading(false);
+      return;
+    }
+    const session = localStorage.getItem(AUTH_SESSION_KEY);
+    if (session === 'pastor') {
+      setUser(getPastorUser());
+    } else {
+      setUser(null);
+    }
+    setAuthLoading(false);
+  }, []);
+
+  // When user is set, fetch users list (for admin)
+  useEffect(() => {
+    if (!user) {
+      setBackendUsers([]);
+      return;
+    }
+    void fetchUsers();
+  }, [user?.id, fetchUsers]);
 
   const login = useCallback(
-    async (email: string, password: string): Promise<boolean> => {
-      const usersList = loadUsers();
-      const rolesList = loadRoles();
-      const found = usersList.find(
-        (u) => u.email.toLowerCase() === email.toLowerCase()
-      );
-      if (!found || found.password !== password) return false;
-      const userObj = storedUserToUser(found, rolesList);
-      setUser(userObj);
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('church_admin_user', JSON.stringify(userObj));
+    async (username: string, password: string): Promise<boolean> => {
+      const u = username.trim();
+      if (u === PASTOR_USERNAME && password === PASTOR_PASSWORD) {
+        setUser(getPastorUser());
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(AUTH_SESSION_KEY, 'pastor');
+        }
+        return true;
       }
-      return true;
+      return false;
     },
     []
   );
 
-  const logout = useCallback(() => {
-    setUser(null);
+  const logout = useCallback(async () => {
     if (typeof window !== 'undefined') {
-      localStorage.removeItem('church_admin_user');
+      localStorage.removeItem(AUTH_SESSION_KEY);
     }
+    setUser(null);
     router.push('/signin');
   }, [router]);
 
@@ -181,6 +286,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const hasPermission = useCallback(
     (key: PermissionKey): boolean => {
       if (!user) return false;
+      if (user.roleId === HEAD_PASTOR_ROLE_ID) return true;
       const role = getRole(user.roleId);
       if (!role) return false;
       return role.permissionKeys.includes(key);
@@ -211,22 +317,48 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const getRoles = useCallback((): Role[] => roles, [roles]);
   const getUsers = useCallback((): UserSummary[] => {
-    return users.map((u) => {
-      const role = roles.find((r) => r.id === u.roleId);
+    return backendUsers.map((u) => {
+      const role = roles.find((r) => r.id === (u.roleId ?? ''));
+      const roleName =
+        role?.name ??
+        (u.role === 'admin' ? 'Head Pastor' : 'User');
       return {
         id: u.id,
         name: u.name,
-        email: u.email,
-        roleId: u.roleId,
-        roleName: role?.name ?? 'Unknown',
-        initials: u.initials,
+        email: u.email ?? u.username,
+        roleId: u.roleId ?? (u.role === 'admin' ? HEAD_PASTOR_ROLE_ID : 'role_church_admin'),
+        roleName,
+        initials:
+          u.initials ??
+          (u.name.trim().split(/\s+/).length >= 2
+            ? (u.name.trim().split(/\s+/)[0][0] +
+                u.name.trim().split(/\s+/).pop()![0]).toUpperCase()
+            : u.name.slice(0, 2).toUpperCase() || u.username.slice(0, 2).toUpperCase()),
       };
     });
-  }, [users, roles]);
+  }, [backendUsers, roles]);
 
   const getStoredUser = useCallback(
-    (id: string): StoredUser | undefined => users.find((u) => u.id === id),
-    [users]
+    (id: string): StoredUser | undefined => {
+      const u = backendUsers.find((x) => x.id === id);
+      if (!u) return undefined;
+      const roleId = u.roleId ?? (u.role === 'admin' ? HEAD_PASTOR_ROLE_ID : 'role_church_admin');
+      const role = roles.find((r) => r.id === roleId);
+      return {
+        id: u.id,
+        name: u.name,
+        email: u.email ?? u.username,
+        roleId,
+        password: '',
+        initials:
+          u.initials ??
+          (u.name.trim().split(/\s+/).length >= 2
+            ? (u.name.trim().split(/\s+/)[0][0] +
+                u.name.trim().split(/\s+/).pop()![0]).toUpperCase()
+            : u.name.slice(0, 2).toUpperCase() || u.username.slice(0, 2).toUpperCase()),
+      };
+    },
+    [backendUsers, roles]
   );
 
   const addRole = useCallback((role: Role) => {
@@ -252,96 +384,111 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return true;
   }, []);
 
-  const addUser = useCallback((u: StoredUser) => {
-    const next = loadUsers();
-    if (next.some((x) => x.id === u.id || x.email.toLowerCase() === u.email.toLowerCase())) return;
-    next.push(u);
-    localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(next));
-    setUsers(next);
-  }, []);
-
-  const updateUser = useCallback((u: StoredUser) => {
-    const next = loadUsers().map((x) => (x.id === u.id ? u : x));
-    localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(next));
-    setUsers(next);
-    if (user?.id === u.id) {
-      const rolesList = loadRoles();
-      setUser(storedUserToUser(u, rolesList));
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('church_admin_user', JSON.stringify(storedUserToUser(u, rolesList)));
+  const addUser = useCallback(
+    async (u: StoredUser): Promise<void> => {
+      const res = await apiFetch('/api/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: u.name,
+          username: u.email,
+          password: u.password,
+          roleId: u.roleId,
+        }),
+      });
+      if (res.status === 401) {
+        setUser(null);
+        throw new Error('Unauthorized');
       }
-    }
-  }, [user?.id]);
-
-  const deleteUser = useCallback((id: string) => {
-    const list = loadUsers();
-    const toDelete = list.find((x) => x.id === id);
-    if (toDelete?.roleId === HEAD_PASTOR_ROLE_ID) return; // never delete Head Pastor
-    const next = list.filter((x) => x.id !== id);
-    localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(next));
-    setUsers(next);
-    if (user?.id === id) {
-      setUser(null);
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem('church_admin_user');
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error((err as { message?: string }).message ?? 'Failed to create user');
       }
-      router.push('/signin');
-    }
-  }, [user?.id, router]);
+      await fetchUsers();
+    },
+    [fetchUsers]
+  );
 
-  const needsBootstrap = users.length === 0;
-
-  const bootstrapFirstAdmin = useCallback(
-    (name: string, email: string, password: string): boolean => {
-      if (users.length > 0) return false;
-      const trimmedName = name.trim();
-      const trimmedEmail = email.trim().toLowerCase();
-      const trimmedPassword = password.trim();
-      if (!trimmedName || !trimmedEmail || !trimmedPassword) return false;
-
-      const parts = trimmedName.split(/\s+/).filter(Boolean);
-      const initials =
-        parts.length >= 2
-          ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
-          : trimmedName.slice(0, 2).toUpperCase() || '??';
-
-      const firstRole: Role = {
-        id: HEAD_PASTOR_ROLE_ID,
-        name: 'Head Pastor',
-        permissionKeys: [...ALL_PERMISSION_KEYS],
-        isSystemRole: true,
+  const updateUser = useCallback(
+    async (u: StoredUser): Promise<void> => {
+      const body: Record<string, string> = {
+        name: u.name,
+        username: u.email,
+        roleId: u.roleId,
       };
-      const firstUserId = 'user_' + Date.now();
-      const firstUser: StoredUser = {
-        id: firstUserId,
-        name: trimmedName,
-        email: trimmedEmail,
-        roleId: HEAD_PASTOR_ROLE_ID,
-        password: trimmedPassword,
+      if (u.password && u.password.trim()) body.password = u.password;
+      const res = await apiFetch(`/api/users/${u.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (res.status === 401) {
+        setUser(null);
+        throw new Error('Unauthorized');
+      }
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error((err as { message?: string }).message ?? 'Failed to update user');
+      }
+      const data = await res.json();
+      await fetchUsers();
+      if (user?.id === u.id) {
+        const backendUser = normalizeBackendUser(data);
+        if (backendUser) setUser(backendUserToUser(backendUser));
+      }
+    },
+    [fetchUsers, user?.id]
+  );
+
+  const deleteUser = useCallback(
+    async (id: string): Promise<void> => {
+      const toDelete = backendUsers.find((x) => x.id === id);
+      if (toDelete?.roleId === HEAD_PASTOR_ROLE_ID || toDelete?.role === 'admin') {
+        const role = roles.find((r) => r.id === (toDelete.roleId ?? ''));
+        if (role?.isSystemRole) return; // never delete Head Pastor
+      }
+      const res = await apiFetch(`/api/users/${id}`, { method: 'DELETE' });
+      if (res.status === 401) {
+        setUser(null);
+        throw new Error('Unauthorized');
+      }
+      if (!res.ok) throw new Error('Failed to delete user');
+      await fetchUsers();
+      if (user?.id === id) {
+        setUser(null);
+        router.push('/signin');
+      }
+    },
+    [backendUsers, fetchUsers, user?.id, router, roles]
+  );
+
+  const usersForContext = useMemo((): StoredUser[] => {
+    return backendUsers.map((u) => {
+      const roleId = u.roleId ?? (u.role === 'admin' ? HEAD_PASTOR_ROLE_ID : 'role_church_admin');
+      const initials =
+        u.initials ??
+        (u.name.trim().split(/\s+/).length >= 2
+          ? (u.name.trim().split(/\s+/)[0][0] +
+              u.name.trim().split(/\s+/).pop()![0]).toUpperCase()
+          : u.name.slice(0, 2).toUpperCase() || u.username.slice(0, 2).toUpperCase());
+      return {
+        id: u.id,
+        name: u.name,
+        email: u.email ?? u.username,
+        roleId,
+        password: '',
         initials,
       };
-
-      const rolesList = [firstRole];
-      const usersList = [firstUser];
-      localStorage.setItem(STORAGE_KEYS.ROLES, JSON.stringify(rolesList));
-      localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(usersList));
-      setRoles(rolesList);
-      setUsers(usersList);
-
-      const userObj = storedUserToUser(firstUser, rolesList);
-      setUser(userObj);
-      localStorage.setItem('church_admin_user', JSON.stringify(userObj));
-      return true;
-    },
-    [users.length]
-  );
+    });
+  }, [backendUsers]);
 
   return (
     <AuthContext.Provider
       value={{
         user,
         roles,
-        users,
+        users: usersForContext,
+        authLoading,
         login,
         logout,
         isAuthenticated: !!user,
@@ -358,8 +505,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         updateUser,
         deleteUser,
         refreshRolesAndUsers,
-        needsBootstrap,
-        bootstrapFirstAdmin,
       }}
     >
       {children}

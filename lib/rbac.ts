@@ -1,8 +1,3 @@
-/**
- * Role-Based Access Control (RBAC)
- * Head Pastor = Super Admin; only they can create/manage roles.
- * All menu access is driven by permissions assigned to roles.
- */
 
 export const PERMISSION_KEYS = [
   'dashboard',
@@ -55,10 +50,41 @@ export interface StoredUser {
 }
 
 export const HEAD_PASTOR_ROLE_ID = 'role_head_pastor';
+export const CHURCH_ADMIN_ROLE_ID = 'role_church_admin';
+export const FINANCE_OFFICER_ROLE_ID = 'role_finance_officer';
 
-/** Default roles on first load. Empty – you add roles yourself via Manage Roles. */
+/** Default roles on first load. Includes Head Pastor, Church Admin, and Financial so they always appear in the role dropdown. */
 export function getDefaultRoles(): Role[] {
-  return [];
+  const financePermissions: PermissionKey[] = [
+    'dashboard',
+    'record_income',
+    'expenditure',
+    'generate_report',
+    'tithes',
+  ];
+  const churchAdminPermissions: PermissionKey[] = PERMISSION_KEYS.filter(
+    (k) => k !== 'manage_roles'
+  );
+  return [
+    {
+      id: HEAD_PASTOR_ROLE_ID,
+      name: 'Head Pastor',
+      permissionKeys: [...ALL_PERMISSION_KEYS],
+      isSystemRole: true,
+    },
+    {
+      id: CHURCH_ADMIN_ROLE_ID,
+      name: 'Church Admin',
+      permissionKeys: churchAdminPermissions,
+      isSystemRole: false,
+    },
+    {
+      id: FINANCE_OFFICER_ROLE_ID,
+      name: 'Financial',
+      permissionKeys: financePermissions,
+      isSystemRole: false,
+    },
+  ];
 }
 
 /** Seed users on first load. Empty – first visitor creates the first administrator. */

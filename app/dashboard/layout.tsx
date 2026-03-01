@@ -24,7 +24,6 @@ import {
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth-context';
 import type { PermissionKey } from '@/lib/rbac';
-import { HEAD_PASTOR_ROLE_ID } from '@/lib/rbac';
 
 interface NavItem {
   name: string;
@@ -55,27 +54,26 @@ export default function DashboardLayout({
 }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, logout, isAuthenticated, hasPermission } = useAuth();
+  const { user, logout, isAuthenticated, authLoading, hasPermission } =
+    useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
-  // Redirect to signin if not authenticated
+  // Redirect to signin once we know the user is not authenticated
   useEffect(() => {
+    if (authLoading) return;
     if (!isAuthenticated) {
       router.push('/signin');
     }
-  }, [isAuthenticated, router]);
+  }, [authLoading, isAuthenticated, router]);
 
-  // Strict RBAC: only show menus the user has permission for. Head Pastor always sees Add User.
+  // Strict RBAC: only show menus the user has permission for. Head Pastor has full access.
   const navigation = allNavigation.filter((item) => {
     const p = item.permission;
-    const hasAccess = Array.isArray(p) ? p.some((key) => hasPermission(key)) : hasPermission(p);
-    const isAddUserItem = Array.isArray(p) && p.includes('add_users') && p.includes('manage_roles');
-    const isHeadPastor = user?.roleId === HEAD_PASTOR_ROLE_ID;
-    return hasAccess || (isAddUserItem && isHeadPastor);
+    return Array.isArray(p) ? p.some((key) => hasPermission(key)) : hasPermission(p);
   });
 
-  if (!isAuthenticated || !user) {
+  if (authLoading || !isAuthenticated || !user) {
     return (
       <div className="flex h-screen items-center justify-center bg-gray-50">
         <div className="text-center">

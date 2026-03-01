@@ -87,7 +87,7 @@ interface Member {
 }
 
 export default function MembersPage() {
-  const { hasRole } = useAuth();
+  const { hasPermission, isSuperAdmin } = useAuth();
   const [showModal, setShowModal] = useState(false);
   const [showMemberDetail, setShowMemberDetail] = useState(false);
   const [selectedMember, setSelectedMember] = useState<Member | null>(null);
@@ -527,7 +527,7 @@ export default function MembersPage() {
           </h1>
           <p className="text-sm sm:text-base text-gray-600 mt-1">Manage parish members and their information</p>
         </div>
-        {!hasRole('head_pastor') && (
+        {(hasPermission('members') || isSuperAdmin) && (
           <Button onClick={() => setShowModal(true)} className="shadow-lg w-full sm:w-auto">
             <HiUserAdd className="h-4 w-4 mr-2" />
             Register New Member

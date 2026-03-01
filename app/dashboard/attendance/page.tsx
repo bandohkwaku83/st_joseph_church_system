@@ -219,7 +219,7 @@ const PATTERN_STYLES = [
 ];
 
 export default function AttendancePage() {
-  const { hasRole } = useAuth();
+  const { hasPermission, isSuperAdmin } = useAuth();
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>(INITIAL_RECORDS);
   const [showRecordModal, setShowRecordModal] = useState(false);
   const [form] = Form.useForm();
@@ -389,7 +389,7 @@ export default function AttendancePage() {
             </h1>
             <p className="text-sm sm:text-base text-gray-600 mt-1">Track and record attendance by category</p>
           </div>
-          {!hasRole('head_pastor') && (
+          {(hasPermission('attendance') || isSuperAdmin) && (
             <Button
               onClick={() => {
                 form.resetFields();

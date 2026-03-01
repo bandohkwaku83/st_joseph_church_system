@@ -22,7 +22,7 @@ interface ExpenditureEntry {
 }
 
 export default function ExpenditurePage() {
-  const { hasRole } = useAuth();
+  const { hasPermission, isSuperAdmin } = useAuth();
   const [showExpenditureModal, setShowExpenditureModal] = useState(false);
   const [showDetailsDrawer, setShowDetailsDrawer] = useState(false);
   const [selectedEntry, setSelectedEntry] = useState<ExpenditureEntry | null>(null);
@@ -222,7 +222,7 @@ export default function ExpenditurePage() {
           </h1>
           <p className="text-gray-600 mt-1">Record and manage expenditure entries</p>
         </div>
-        {!hasRole('head_pastor') && (
+        {(hasPermission('expenditure') || isSuperAdmin) && (
           <Button onClick={() => setShowExpenditureModal(true)} className="shadow-lg bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800">
             <HiMinus className="h-4 w-4 mr-2" />
             Record Expenditure

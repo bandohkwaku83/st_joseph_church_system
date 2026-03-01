@@ -2,7 +2,9 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 ## Getting Started
 
-**Important:** Always run `npm run dev` and `npm run build` from this project’s root directory (`church_administration_system_v3`). If your terminal is in a parent folder (e.g. `Documents/projects`), run `cd church_administration_system_v3` first. Running from the wrong directory causes errors like "Can't resolve 'tailwindcss'".
+**Important:** Always run `npm run dev` and `npm run build` from this project’s root directory (`church_administration_system_v3`). If your terminal is in a parent folder (e.g. `Documents/projects`), run `cd church_administration_system_v3` first. Running from the wrong directory can cause "Can't resolve 'tailwindcss'".
+
+**Backend auth:** Login and logout call a **separate** backend (your MongoDB API). Copy `.env.example` to `.env.local` and set `NEXT_PUBLIC_API_URL` to your backend URL (e.g. `http://localhost:5000`). Without it, auth requests return 404.
 
 First, run the development server:
 

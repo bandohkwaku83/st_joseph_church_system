@@ -37,7 +37,7 @@ interface OrganizationMember {
 }
 
 export default function DepartmentsPage() {
-  const { hasRole } = useAuth();
+  const { hasRole, hasPermission, isSuperAdmin } = useAuth();
   const [showModal, setShowModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
   const [showManageModal, setShowManageModal] = useState(false);
@@ -264,7 +264,7 @@ export default function DepartmentsPage() {
             Manage organizations, assign leaders, and configure role permissions
           </p>
         </div>
-        {!hasRole('head_pastor') && (
+        {(hasPermission('departments') || isSuperAdmin) && (
           <Button onClick={() => setShowModal(true)} className="shadow-lg">
             <PlusOutlined className="mr-2" />
             Create Organization

@@ -31,7 +31,7 @@ const sampleMembers = [
 ];
 
 export default function TithesPage() {
-  const { hasRole } = useAuth();
+  const { hasPermission, isSuperAdmin } = useAuth();
   const [showTitheModal, setShowTitheModal] = useState(false);
   const [showReceiptModal, setShowReceiptModal] = useState(false);
   const [selectedTithe, setSelectedTithe] = useState<Tithe | null>(null);
@@ -170,7 +170,7 @@ export default function TithesPage() {
           </h1>
           <p className="text-gray-600 mt-1">Record and manage tithe contributions</p>
         </div>
-        {!hasRole('head_pastor') && (
+        {(hasPermission('tithes') || isSuperAdmin) && (
           <Button onClick={() => setShowTitheModal(true)} className="shadow-lg">
             <HiPlus className="h-4 w-4 mr-2" />
             Record Tithe

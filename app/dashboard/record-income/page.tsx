@@ -21,7 +21,7 @@ interface IncomeEntry {
 }
 
 export default function RecordIncomePage() {
-  const { hasRole } = useAuth();
+  const { hasPermission, isSuperAdmin } = useAuth();
   const [showIncomeModal, setShowIncomeModal] = useState(false);
   const [showDetailsDrawer, setShowDetailsDrawer] = useState(false);
   const [selectedEntry, setSelectedEntry] = useState<IncomeEntry | null>(null);
@@ -212,7 +212,7 @@ export default function RecordIncomePage() {
           </h1>
           <p className="text-gray-600 mt-1">Record and manage income entries</p>
         </div>
-        {!hasRole('head_pastor') && (
+        {(hasPermission('record_income') || isSuperAdmin) && (
           <Button onClick={() => setShowIncomeModal(true)} className="shadow-lg">
             <HiPlus className="h-4 w-4 mr-2" />
             Record Income Entry

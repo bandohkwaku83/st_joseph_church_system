@@ -106,15 +106,19 @@ function UsersAndRolesContent() {
     setFormMenuAccess(new Set());
   };
 
-  const handleDeleteUser = (id: string, name: string, roleId: string) => {
+  const handleDeleteUser = async (id: string, name: string, roleId: string) => {
     if (roleId === HEAD_PASTOR_ROLE_ID) {
       showToast('The Head Pastor account cannot be deleted.', 'error');
       return;
     }
     if (typeof window === 'undefined') return;
     if (!window.confirm(`Are you sure you want to delete "${name}"? This cannot be undone.`)) return;
-    deleteUser(id);
-    showToast('User deleted.', 'success');
+    try {
+      await deleteUser(id);
+      showToast('User deleted.', 'success');
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to delete user.', 'error');
+    }
   };
 
   const toggleMenuAccess = (key: PermissionKey) => {
@@ -126,7 +130,7 @@ function UsersAndRolesContent() {
     });
   };
 
-  const saveUser = () => {
+  const saveUser = async () => {
     const name = formName.trim();
     const username = formUsername.trim().toLowerCase();
     if (!name || !username) {
@@ -164,46 +168,50 @@ function UsersAndRolesContent() {
       }
     }
 
-    if (editingUserId) {
-      const existing = getStoredUser(editingUserId);
-      if (!existing) return;
-      const otherWithSameUsername = users.some(
-        (u) => u.id !== editingUserId && u.email.toLowerCase() === username
-      );
-      if (otherWithSameUsername) {
-        showToast('Another user already has this username.', 'error');
-        return;
+    try {
+      if (editingUserId) {
+        const existing = getStoredUser(editingUserId);
+        if (!existing) return;
+        const otherWithSameUsername = users.some(
+          (u) => u.id !== editingUserId && u.email.toLowerCase() === username
+        );
+        if (otherWithSameUsername) {
+          showToast('Another user already has this username.', 'error');
+          return;
+        }
+        await updateUser({
+          ...existing,
+          name,
+          email: username,
+          roleId: roleIdToUse,
+          password: formPassword.trim() || existing.password,
+          initials: getInitials(name),
+        });
+        showToast('User updated successfully.', 'success');
+      } else {
+        if (!formPassword.trim()) {
+          showToast('Password is required for new users.', 'error');
+          return;
+        }
+        if (users.some((u) => u.email.toLowerCase() === username)) {
+          showToast('A user with this username already exists.', 'error');
+          return;
+        }
+        const id = 'user_' + Date.now();
+        await addUser({
+          id,
+          name,
+          email: username,
+          roleId: roleIdToUse,
+          password: formPassword.trim(),
+          initials: getInitials(name),
+        });
+        showToast('User created successfully.', 'success');
       }
-      updateUser({
-        ...existing,
-        name,
-        email: username,
-        roleId: roleIdToUse,
-        password: formPassword.trim() || existing.password,
-        initials: getInitials(name),
-      });
-      showToast('User updated successfully.', 'success');
-    } else {
-      if (!formPassword.trim()) {
-        showToast('Password is required for new users.', 'error');
-        return;
-      }
-      if (users.some((u) => u.email.toLowerCase() === username)) {
-        showToast('A user with this username already exists.', 'error');
-        return;
-      }
-      const id = 'user_' + Date.now();
-      addUser({
-        id,
-        name,
-        email: username,
-        roleId: roleIdToUse,
-        password: formPassword.trim(),
-        initials: getInitials(name),
-      });
-      showToast('User created successfully.', 'success');
+      closeUserForm();
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Something went wrong.', 'error');
     }
-    closeUserForm();
   };
 
   if (!canManageUsers) return null;

@@ -21,7 +21,8 @@ export function ProtectedRoute({
   allowedRoles,
   allowSuperAdmin = false,
 }: ProtectedRouteProps) {
-  const { isAuthenticated, hasPermission, hasRole, isSuperAdmin } = useAuth();
+  const { isAuthenticated, authLoading, hasPermission, hasRole, isSuperAdmin } =
+    useAuth();
   const router = useRouter();
 
   const hasRequiredPermission =
@@ -32,6 +33,7 @@ export function ProtectedRoute({
     !allowedRoles?.length || allowedRoles.some((r) => hasRole(r));
 
   useEffect(() => {
+    if (authLoading) return;
     if (!isAuthenticated) {
       router.push('/signin');
       return;
@@ -44,6 +46,7 @@ export function ProtectedRoute({
       router.push('/dashboard');
     }
   }, [
+    authLoading,
     isAuthenticated,
     allowedPermissions,
     allowedRoles,
@@ -52,6 +55,7 @@ export function ProtectedRoute({
     router,
   ]);
 
+  if (authLoading) return null;
   if (!isAuthenticated) return null;
   if (allowedPermissions?.length && !hasRequiredPermission) return null;
   if (allowedRoles?.length && !hasRequiredRole) return null;
