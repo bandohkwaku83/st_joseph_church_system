@@ -37,17 +37,63 @@ function UsersAndRolesContent() {
     updateUser,
     deleteUser,
     hasPermission,
+    refreshRolesAndUsers,
   } = useAuth();
   const { showToast } = useToast();
   const roles = getRoles();
   const users = getUsers();
 
+  const [loading, setLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState<'users' | 'roles'>('users');
+  const [editingRole, setEditingRole] = useState<Role | null>(null);
+
+  const handleRefresh = async () => {
+    setLoading(true);
+    try {
+      refreshRolesAndUsers();
+      showToast('Data refreshed successfully.', 'success');
+    } catch (error) {
+      showToast('Failed to refresh data.', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleEditRole = (role: Role) => {
+    setEditingRole({ ...role });
+  };
+
+  const handleSaveRole = () => {
+    if (!editingRole) return;
+    
+    try {
+      updateRole(editingRole);
+      showToast('Role updated successfully.', 'success');
+      setEditingRole(null);
+    } catch (error) {
+      showToast('Failed to update role.', 'error');
+    }
+  };
+
+  const handleTogglePermission = (permission: PermissionKey) => {
+    if (!editingRole) return;
+    
+    const newPermissions = editingRole.permissionKeys.includes(permission)
+      ? editingRole.permissionKeys.filter(p => p !== permission)
+      : [...editingRole.permissionKeys, permission];
+    
+    setEditingRole({
+      ...editingRole,
+      permissionKeys: newPermissions
+    });
+  };
+
   const isHeadPastorRole = (role: Role | undefined) =>
     role?.id === HEAD_PASTOR_ROLE_ID || role?.isSystemRole;
 
   const currentUserRole = roles.find((r) => r.id === user?.roleId);
-  const canManageUsers = hasPermission('add_users') || isHeadPastorRole(currentUserRole);
-  const canCreateNewRole = hasPermission('manage_roles') || isHeadPastorRole(currentUserRole);
+  const canManageUsers = hasPermission('add_user') || isHeadPastorRole(currentUserRole);
+  const canCreateNewRole = hasPermission('create_role') || isHeadPastorRole(currentUserRole);
 
   const [userFormOpen, setUserFormOpen] = useState(false);
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
@@ -62,7 +108,7 @@ function UsersAndRolesContent() {
   const selectedRole = roles.find((r) => r.id === formRoleId);
 
   const permissionsForNewRole = useMemo(
-    () => PERMISSION_KEYS.filter((k) => k !== 'manage_roles'),
+    () => PERMISSION_KEYS.filter((k) => k !== 'create_role'),
     []
   );
 
@@ -94,6 +140,9 @@ function UsersAndRolesContent() {
     setFormNewRoleName('');
     setFormMenuAccess(role ? new Set(role.permissionKeys) : new Set());
   };
+
+  // Get the current user being edited to access their permissions
+  const editingUser = editingUserId ? users.find(u => u.id === editingUserId) : null;
 
   const closeUserForm = () => {
     setUserFormOpen(false);
@@ -218,18 +267,27 @@ function UsersAndRolesContent() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Add User</h1>
-        <p className="text-gray-600 mt-1">
-          Create and manage users. Set name, username, password, role, and menu access.
-        </p>
-      </div>
-
-      <div className="flex justify-end">
-        <Button onClick={openAddUser} className="flex items-center gap-2">
-          <HiPlus className="h-5 w-5" />
-          Add User
-        </Button>
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Users & Roles</h1>
+          <p className="text-gray-600 mt-1">
+            Create and manage users. Set name, username, password, role, and menu access.
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <Button 
+            onClick={handleRefresh} 
+            variant="outline" 
+            disabled={loading}
+            className="flex items-center gap-2"
+          >
+            {loading ? 'Loading...' : 'Refresh'}
+          </Button>
+          <Button onClick={openAddUser} className="flex items-center gap-2">
+            <HiPlus className="h-5 w-5" />
+            Add User
+          </Button>
+        </div>
       </div>
 
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
@@ -252,48 +310,122 @@ function UsersAndRolesContent() {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {users.map((u) => (
-                <tr key={u.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-full bg-green-100 text-green-700 flex items-center justify-center text-sm font-medium">
-                        {u.initials}
-                      </div>
-                      <span className="font-medium text-gray-900">{u.name}</span>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-sm text-gray-600">{u.email}</td>
-                  <td className="px-4 py-3 text-sm text-gray-600">{u.roleName}</td>
-                  <td className="px-4 py-3 text-right">
-                    <div className="flex items-center justify-end gap-1">
-                      <button
-                        onClick={() => openEditUser(u.id)}
-                        className="p-2 text-gray-600 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-                        title="Edit user"
-                      >
-                        <HiOutlinePencil className="h-5 w-5" />
-                      </button>
-                      {u.roleId !== HEAD_PASTOR_ROLE_ID ? (
-                        <button
-                          onClick={() => handleDeleteUser(u.id, u.name, u.roleId)}
-                          className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                          title="Delete user"
-                        >
-                          <HiOutlineTrash className="h-5 w-5" />
-                        </button>
-                      ) : (
-                        <span className="text-xs text-gray-400 px-2" title="Head Pastor cannot be deleted">
-                          —
-                        </span>
-                      )}
-                    </div>
+              {loading ? (
+                <tr>
+                  <td colSpan={4} className="px-4 py-8 text-center text-gray-500">
+                    Loading users...
                   </td>
                 </tr>
-              ))}
+              ) : users.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="px-4 py-8 text-center text-gray-500">
+                    No users found. Try refreshing or check your connection.
+                  </td>
+                </tr>
+              ) : (
+                users.map((u) => (
+                  <tr key={u.id} className="hover:bg-gray-50">
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-full bg-green-100 text-green-700 flex items-center justify-center text-sm font-medium">
+                          {u.initials}
+                        </div>
+                        <span className="font-medium text-gray-900">{u.name}</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-600">{u.email}</td>
+                    <td className="px-4 py-3 text-sm text-gray-600">{u.roleName}</td>
+                    <td className="px-4 py-3 text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <button
+                          onClick={() => openEditUser(u.id)}
+                          className="p-2 text-gray-600 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                          title="Edit user"
+                        >
+                          <HiOutlinePencil className="h-5 w-5" />
+                        </button>
+                        {u.roleId !== HEAD_PASTOR_ROLE_ID ? (
+                          <button
+                            onClick={() => handleDeleteUser(u.id, u.name, u.roleId)}
+                            className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            title="Delete user"
+                          >
+                            <HiOutlineTrash className="h-5 w-5" />
+                          </button>
+                        ) : (
+                          <span className="text-xs text-gray-400 px-2" title="Head Pastor cannot be deleted">
+                            —
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
       </div>
+
+      {/* Role Edit Modal */}
+      {editingRole && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+          <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-gray-200">
+              <h2 className="text-lg font-semibold text-gray-900">
+                Edit Role: {editingRole.name}
+              </h2>
+            </div>
+            <div className="p-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-3">
+                  Permissions
+                </label>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 border border-gray-200 rounded-lg p-4 bg-gray-50 max-h-96 overflow-y-auto">
+                  {PERMISSION_KEYS.map((permission) => (
+                    <label
+                      key={permission}
+                      className="flex items-center gap-3 cursor-pointer p-2 rounded-lg hover:bg-white transition-colors"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={editingRole.permissionKeys.includes(permission)}
+                        onChange={() => handleTogglePermission(permission)}
+                        disabled={
+                          permission === 'create_role' &&
+                          editingRole.isSystemRole
+                        }
+                        className="rounded border-gray-300 text-green-600 focus:ring-green-500 disabled:opacity-60"
+                      />
+                      <div className="flex-1">
+                        <span className="text-sm font-medium text-gray-900">
+                          {PERMISSION_LABELS[permission]}
+                        </span>
+                        <p className="text-xs text-gray-500">
+                          {permission}
+                        </p>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+                {editingRole.isSystemRole && (
+                  <p className="text-xs text-gray-500 mt-2">
+                    Head Pastor role always has "Create Role" permission and cannot be removed.
+                  </p>
+                )}
+              </div>
+            </div>
+            <div className="p-6 border-t border-gray-200 flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setEditingRole(null)}>
+                Cancel
+              </Button>
+              <Button onClick={handleSaveRole}>
+                Save Changes
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Add User / Edit User modal */}
       {userFormOpen && (
@@ -375,6 +507,48 @@ function UsersAndRolesContent() {
                 </select>
               </div>
 
+              {/* Show user permissions in read-only mode when editing */}
+              {editingUserId && editingUser && editingUser.permissions && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Current User Permissions (Read-only)
+                  </label>
+                  <div className="border border-gray-200 rounded-lg p-3 bg-gray-50 max-h-56 overflow-y-auto">
+                    {editingUser.permissions.length > 0 ? (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                        {editingUser.permissions.map((permission) => (
+                          <div
+                            key={permission}
+                            className="flex items-center gap-2 p-2 rounded-lg bg-white"
+                          >
+                            <div className="w-4 h-4 rounded border border-gray-300 bg-green-100 flex items-center justify-center">
+                              <svg className="w-3 h-3 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                              </svg>
+                            </div>
+                            <div className="flex-1">
+                              <span className="text-sm font-medium text-gray-900">
+                                {PERMISSION_LABELS[permission as PermissionKey] || permission}
+                              </span>
+                              <p className="text-xs text-gray-500">
+                                {permission}
+                              </p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-gray-500 text-center py-4">
+                        This user has no permissions assigned.
+                      </p>
+                    )}
+                  </div>
+                  <p className="text-xs text-gray-500 mt-2">
+                    These permissions are managed by the backend system and cannot be edited here.
+                  </p>
+                </div>
+              )}
+
               {isCreatingNewRole && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -404,7 +578,7 @@ function UsersAndRolesContent() {
                         checked={formMenuAccess.has(key)}
                         onChange={() => toggleMenuAccess(key)}
                         disabled={
-                          key === 'manage_roles' &&
+                          key === 'create_role' &&
                           isHeadPastorRole(selectedRole)
                         }
                         className="rounded border-gray-300 text-green-600 focus:ring-green-500 disabled:opacity-60"
@@ -417,7 +591,7 @@ function UsersAndRolesContent() {
                 </div>
                 {isHeadPastorRole(selectedRole) && (
                   <p className="text-xs text-gray-500 mt-1">
-                    Head Pastor role always has &quot;Manage Roles&quot; and cannot be removed.
+                    Head Pastor role always has &quot;Create Role&quot; and cannot be removed.
                   </p>
                 )}
               </div>
@@ -440,7 +614,7 @@ function UsersAndRolesContent() {
 export default function UsersAndRolesPage() {
   return (
     <ProtectedRoute
-      allowedPermissions={['manage_roles', 'add_users']}
+      allowedPermissions={['create_role', 'add_user']}
       allowSuperAdmin
     >
       <UsersAndRolesContent />

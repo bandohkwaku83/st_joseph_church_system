@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   HiOutlineOfficeBuilding,
   HiUserGroup,
@@ -8,19 +9,40 @@ import {
 } from 'react-icons/hi';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Table, Tag, Space, Button as AntButton, Input as AntInput, Drawer } from 'antd';
+import { Table, Tag, Button as AntButton, Input as AntInput, Drawer, message, Spin } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { SearchOutlined, EditOutlined, EyeOutlined, PlusOutlined } from '@ant-design/icons';
+import { SearchOutlined, EditOutlined, EyeOutlined, PlusOutlined, LoadingOutlined } from '@ant-design/icons';
 import { useAuth } from '@/lib/auth-context';
+import { apiRequest } from '@/lib/api';
 
 interface Department {
   id: number;
   name: string;
-  leader: string;
-  members: number;
-  status: 'Active' | 'Inactive';
   description: string;
-  type: 'organization';
+  inserted_at: string;
+  updated_at: string;
+  leader_id: number | null;
+  members: OrganizationMember[];
+}
+
+interface BackendOrganization {
+  id: number;
+  name: string;
+  description: string;
+  inserted_at: string;
+  updated_at: string;
+  leader_id: number | null;
+  members: {
+    role: string;
+    member_id: number;
+    joined_at: string;
+  }[];
+}
+
+interface OrganizationResponse {
+  message: string;
+  status: string;
+  organisations: BackendOrganization[];
 }
 
 interface Role {
@@ -30,13 +52,27 @@ interface Role {
 }
 
 interface OrganizationMember {
-  id: number;
-  name: string;
-  phone: string;
-  email?: string;
+  role: string;
+  member_id: number;
+  joined_at: string;
+}
+
+interface CreateOrganizationPayload {
+  organisation: {
+    name: string;
+    description: string;
+    status: string;
+    organisation_members: {
+      member_id: number;
+      role: string;
+      joined_at: string;
+    }[];
+  };
 }
 
 export default function DepartmentsPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const { hasRole, hasPermission, isSuperAdmin } = useAuth();
   const [showModal, setShowModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
@@ -44,22 +80,116 @@ export default function DepartmentsPage() {
   const [selectedOrganization, setSelectedOrganization] = useState<Department | null>(null);
   const [managingOrganization, setManagingOrganization] = useState<Department | null>(null);
   const [organizationSearchTerm, setOrganizationSearchTerm] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [creating, setCreating] = useState(false);
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [createForm, setCreateForm] = useState({
+    name: '',
+    description: '',
+    status: 'active',
+  });
   const [manageForm, setManageForm] = useState({
     name: '',
-    leader: '',
-    status: 'Active' as 'Active' | 'Inactive',
+    description: '',
+    status: 'active',
   });
 
-  const [departments, setDepartments] = useState<Department[]>([
-    { id: 1, name: 'Christian Mothers Association', leader: 'Mary Johnson', members: 85, status: 'Active', description: 'Christian Mothers Association', type: 'organization' },
-    { id: 2, name: 'Knights of St. John International (KSJI)', leader: 'James Wilson', members: 42, status: 'Active', description: 'Knights of St. John International', type: 'organization' },
-    { id: 3, name: 'Knights and Ladies of Marshall', leader: 'David Brown', members: 38, status: 'Active', description: 'Knights and Ladies of Marshall', type: 'organization' },
-    { id: 4, name: 'Catholic Youth Organization (CYO)', leader: 'Michael Johnson', members: 120, status: 'Active', description: 'Catholic Youth Organization', type: 'organization' },
-    { id: 5, name: 'Legion of Mary', leader: 'Patricia Brown', members: 55, status: 'Active', description: 'Legion of Mary', type: 'organization' },
-    { id: 6, name: 'Choir', leader: 'Sarah Williams', members: 48, status: 'Active', description: 'Parish choir ministry', type: 'organization' },
-    { id: 7, name: 'Altar Servers', leader: 'Emmanuel Osei', members: 22, status: 'Active', description: 'Altar servers ministry', type: 'organization' },
-    { id: 8, name: 'Lectors', leader: 'Linda Thompson', members: 18, status: 'Active', description: 'Lectors and readers ministry', type: 'organization' },
-  ]);
+  // Fetch organizations from API
+  const fetchOrganizations = async () => {
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('auth_token');
+      
+      const response = await apiRequest<OrganizationResponse>('/organisations', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (response.error) {
+        message.error(`Failed to fetch organizations: ${response.error.message}`);
+        return;
+      }
+
+      if (response.data?.organisations) {
+        // Transform backend data to frontend format
+        const transformedOrgs: Department[] = response.data.organisations.map(org => ({
+          id: org.id,
+          name: org.name,
+          description: org.description,
+          inserted_at: org.inserted_at,
+          updated_at: org.updated_at,
+          leader_id: org.leader_id,
+          members: org.members || [],
+        }));
+        
+        setDepartments(transformedOrgs);
+      }
+    } catch (error) {
+      console.error('Error fetching organizations:', error);
+      message.error('Failed to fetch organizations');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Create organization
+  const createOrganization = async (formData: typeof createForm) => {
+    try {
+      setCreating(true);
+      const token = localStorage.getItem('auth_token');
+      
+      const payload: CreateOrganizationPayload = {
+        organisation: {
+          name: formData.name,
+          description: formData.description,
+          status: formData.status,
+          organisation_members: [], // Empty for now, can be extended later
+        },
+      };
+
+      const response = await apiRequest('/organisations', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (response.error) {
+        message.error(`Failed to create organization: ${response.error.message}`);
+        return;
+      }
+
+      message.success('Organization created successfully!');
+      setShowModal(false);
+      setCreateForm({ name: '', description: '', status: 'active' });
+      
+      // Refresh the organizations list
+      await fetchOrganizations();
+    } catch (error) {
+      console.error('Error creating organization:', error);
+      message.error('Failed to create organization');
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  // Load organizations on component mount and when refresh param is present
+  useEffect(() => {
+    fetchOrganizations();
+  }, []);
+
+  // Check for refresh parameter and refetch if present
+  useEffect(() => {
+    const refresh = searchParams.get('refresh');
+    if (refresh === 'true') {
+      fetchOrganizations();
+      // Clean up the URL parameter
+      router.replace('/dashboard/departments');
+    }
+  }, [searchParams, router]);
 
   const roles: Role[] = [
     { role: 'Priest', permissions: ['Full Access'], members: 2 },
@@ -67,44 +197,6 @@ export default function DepartmentsPage() {
     { role: 'Treasurer', permissions: ['Finance', 'Reports'], members: 1 },
     { role: 'Department Leader', permissions: ['Department Members', 'Attendance'], members: 12 },
   ];
-
-  // Sample members data for organizations
-  const organizationMembers: Record<number, OrganizationMember[]> = {
-    1: [
-      { id: 1, name: 'Mary Johnson', phone: '+233 24 123 4567', email: 'mary.johnson@gmail.com' },
-      { id: 2, name: 'Grace Mensah', phone: '+233 20 234 5678', email: 'grace.mensah@yahoo.com' },
-      { id: 3, name: 'Ama Adjei', phone: '+233 26 345 6789', email: 'ama.adjei@hotmail.com' },
-    ],
-    2: [
-      { id: 1, name: 'James Wilson', phone: '+233 24 111 2222', email: 'james.wilson@gmail.com' },
-      { id: 2, name: 'David Osei', phone: '+233 20 222 3333', email: 'david.osei@yahoo.com' },
-    ],
-    3: [
-      { id: 1, name: 'David Brown', phone: '+233 24 555 6666', email: 'david.brown@gmail.com' },
-      { id: 2, name: 'Patricia Brown', phone: '+233 20 666 7777', email: 'patricia.brown@yahoo.com' },
-    ],
-    4: [
-      { id: 1, name: 'Michael Johnson', phone: '+233 24 999 0000', email: 'michael.johnson@gmail.com' },
-      { id: 2, name: 'Prince Owusu', phone: '+233 20 000 1111', email: 'prince.owusu@yahoo.com' },
-      { id: 3, name: 'Samuel Tetteh', phone: '+233 26 111 2222', email: 'samuel.tetteh@hotmail.com' },
-    ],
-    5: [
-      { id: 1, name: 'Patricia Brown', phone: '+233 24 222 3333', email: 'patricia.brown@gmail.com' },
-      { id: 2, name: 'Ruth Adjei', phone: '+233 20 333 4444', email: 'ruth.adjei@yahoo.com' },
-    ],
-    6: [
-      { id: 1, name: 'Sarah Williams', phone: '+233 24 444 5555', email: 'sarah.williams@gmail.com' },
-      { id: 2, name: 'Linda Thompson', phone: '+233 20 555 6666', email: 'linda.thompson@yahoo.com' },
-    ],
-    7: [
-      { id: 1, name: 'Emmanuel Osei', phone: '+233 24 777 8888', email: 'emmanuel.osei@gmail.com' },
-      { id: 2, name: 'Daniel Appiah', phone: '+233 20 888 9999', email: 'daniel.appiah@yahoo.com' },
-    ],
-    8: [
-      { id: 1, name: 'Linda Thompson', phone: '+233 24 999 0000', email: 'linda.thompson@gmail.com' },
-      { id: 2, name: 'Cynthia Mensah', phone: '+233 20 000 1111', email: 'cynthia.mensah@yahoo.com' },
-    ],
-  };
 
   // Pattern styles matching dashboard
   const patternStyles = [
@@ -123,19 +215,16 @@ export default function DepartmentsPage() {
   ];
 
   // Calculate stats
-  const totalOrganizations = departments.length;
-  const uniqueLeaders = new Set(departments.map(d => d.leader)).size;
-
   const stats = [
     { 
       label: 'Total Organizations', 
-      value: totalOrganizations.toString(), 
+      value: departments.length.toString(), 
       icon: HiOutlineOfficeBuilding,
       color: 'text-blue-600'
     },
     { 
-      label: 'Leaders', 
-      value: uniqueLeaders.toString(), 
+      label: 'Total Members', 
+      value: departments.reduce((total, org) => total + org.members.length, 0).toString(), 
       icon: HiUserGroup,
       color: 'text-purple-600'
     },
@@ -144,68 +233,8 @@ export default function DepartmentsPage() {
   // Filter organizations
   const filteredOrganizations = departments.filter((org) =>
     org.name.toLowerCase().includes(organizationSearchTerm.toLowerCase()) ||
-    org.leader.toLowerCase().includes(organizationSearchTerm.toLowerCase())
+    org.description.toLowerCase().includes(organizationSearchTerm.toLowerCase())
   );
-
-  // Table columns for Organizations
-  const organizationColumns: ColumnsType<Department> = [
-    {
-      title: 'Organization Name',
-      dataIndex: 'name',
-      key: 'name',
-      render: (text: string) => (
-        <span className="text-sm font-semibold text-gray-900">{text}</span>
-      ),
-    },
-    {
-      title: 'Leader',
-      dataIndex: 'leader',
-      key: 'leader',
-      render: (text: string) => (
-        <span className="text-sm text-gray-900">{text}</span>
-      ),
-    },
-    {
-      title: 'Members',
-      dataIndex: 'members',
-      key: 'members',
-      render: (members: number) => (
-        <span className="text-sm font-semibold text-blue-600">{members}</span>
-      ),
-      sorter: (a, b) => a.members - b.members,
-    },
-    {
-      title: 'Status',
-      dataIndex: 'status',
-      key: 'status',
-      render: (status: string) => (
-        <Tag color={status === 'Active' ? 'green' : 'default'}>
-          {status}
-        </Tag>
-      ),
-    },
-    {
-      title: 'Actions',
-      key: 'actions',
-      render: (_, record) => (
-        <Space>
-          <AntButton 
-            type="link" 
-            icon={<EyeOutlined />} 
-            className="text-blue-600"
-            title="View"
-          />
-          <AntButton 
-            type="link" 
-            icon={<EditOutlined />} 
-            className="text-green-600"
-            title="Manage"
-          />
-        </Space>
-      ),
-    },
-  ];
-
   // Role table columns
   const roleColumns: ColumnsType<Role> = [
     {
@@ -264,11 +293,20 @@ export default function DepartmentsPage() {
             Manage organizations, assign leaders, and configure role permissions
           </p>
         </div>
-        {(hasPermission('departments') || isSuperAdmin) && (
-          <Button onClick={() => setShowModal(true)} className="shadow-lg">
-            <PlusOutlined className="mr-2" />
-            Create Organization
-          </Button>
+        {(hasPermission('organizations') || isSuperAdmin) && (
+          <div className="flex gap-2">
+            <Button 
+              variant="outline" 
+              onClick={fetchOrganizations}
+              disabled={loading}
+            >
+              {loading ? <LoadingOutlined spin /> : 'Refresh'}
+            </Button>
+            <Button onClick={() => setShowModal(true)} className="shadow-lg">
+              <PlusOutlined className="mr-2" />
+              Create Organization
+            </Button>
+          </div>
         )}
       </div>
 
@@ -300,7 +338,6 @@ export default function DepartmentsPage() {
           );
         })}
       </div>
-
       {/* Organizations Cards */}
       <Card className="relative overflow-hidden">
         <CardHeader className="pb-4 relative z-10">
@@ -318,7 +355,12 @@ export default function DepartmentsPage() {
           </div>
         </CardHeader>
         <CardContent className="relative z-10">
-          {filteredOrganizations.length === 0 ? (
+          {loading ? (
+            <div className="text-center py-12">
+              <Spin indicator={<LoadingOutlined style={{ fontSize: 24 }} spin />} />
+              <p className="text-gray-500 mt-4">Loading organizations...</p>
+            </div>
+          ) : filteredOrganizations.length === 0 ? (
             <div className="text-center py-12 text-gray-500">
               <HiOutlineOfficeBuilding className="h-12 w-12 mx-auto mb-4 text-gray-400" />
               <p>No organizations found</p>
@@ -346,10 +388,10 @@ export default function DepartmentsPage() {
                       <div className="flex items-center justify-between py-2 border-b border-gray-100">
                         <span className="text-sm text-gray-600 flex items-center gap-2">
                           <HiUserGroup className="h-4 w-4" />
-                          Leader
+                          Description
                         </span>
-                        <span className="text-sm font-medium text-gray-900">
-                          {org.leader}
+                        <span className="text-sm font-medium text-gray-900 truncate max-w-32">
+                          {org.description}
                         </span>
                       </div>
                       <div className="flex items-center justify-between py-2">
@@ -358,7 +400,7 @@ export default function DepartmentsPage() {
                           Members
                         </span>
                         <span className="text-sm font-semibold text-blue-600">
-                          {org.members}
+                          {org.members.length}
                         </span>
                       </div>
                     </div>
@@ -376,14 +418,25 @@ export default function DepartmentsPage() {
                         View
                       </Button>
                       <Button 
+                        variant="outline"
+                        size="sm" 
+                        className="flex-1"
+                        onClick={() => {
+                          router.push(`/dashboard/departments/add-members?orgId=${org.id}&orgName=${encodeURIComponent(org.name)}`);
+                        }}
+                      >
+                        <HiUserGroup className="mr-1" />
+                        Update Members
+                      </Button>
+                      <Button 
                         size="sm" 
                         className="flex-1"
                         onClick={() => {
                           setManagingOrganization(org);
                           setManageForm({
                             name: org.name,
-                            leader: org.leader,
-                            status: org.status,
+                            description: org.description,
+                            status: 'active',
                           });
                           setShowManageModal(true);
                         }}
@@ -399,7 +452,6 @@ export default function DepartmentsPage() {
           )}
         </CardContent>
       </Card>
-
       {/* Role-Based Access - Hidden for head_pastor and church_admin */}
       {!hasRole('head_pastor') && !hasRole('church_admin') && (
         <Card className="relative overflow-hidden">
@@ -449,8 +501,8 @@ export default function DepartmentsPage() {
                 <h2 className="text-2xl font-bold text-gray-900 mb-2">
                   {selectedOrganization.name}
                 </h2>
-                <Tag color={selectedOrganization.status === 'Active' ? 'green' : 'default'} className="text-sm">
-                  {selectedOrganization.status}
+                <Tag color="green" className="text-sm">
+                  Active
                 </Tag>
               </div>
             </div>
@@ -458,50 +510,69 @@ export default function DepartmentsPage() {
             <div className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="bg-gray-50 rounded-lg p-4">
-                  <p className="text-sm text-gray-600 mb-1">Leader</p>
+                  <p className="text-sm text-gray-600 mb-1">Description</p>
                   <p className="text-base font-semibold text-gray-900 flex items-center gap-2">
                     <HiUserGroup className="h-4 w-4 text-gray-500" />
-                    {selectedOrganization.leader}
+                    {selectedOrganization.description}
                   </p>
                 </div>
                 <div className="bg-gray-50 rounded-lg p-4">
                   <p className="text-sm text-gray-600 mb-1">Total Members</p>
                   <p className="text-base font-semibold text-blue-600 flex items-center gap-2">
                     <HiOutlineUsers className="h-4 w-4 text-blue-500" />
-                    {selectedOrganization.members}
+                    {selectedOrganization.members.length}
                   </p>
                 </div>
               </div>
 
               <div className="mt-4">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Members</h3>
-                <Table
-                  columns={[
-                    {
-                      title: 'Name',
-                      dataIndex: 'name',
-                      key: 'name',
-                      render: (text: string) => (
-                        <span className="text-sm font-medium text-gray-900">{text}</span>
-                      ),
-                    },
-                    {
-                      title: 'Contact',
-                      dataIndex: 'phone',
-                      key: 'phone',
-                      render: (text: string) => (
-                        <span className="text-sm text-gray-700">{text}</span>
-                      ),
-                    },
-                  ]}
-                  dataSource={organizationMembers[selectedOrganization.id] || []}
-                  rowKey={(record) => `member-${record.id}`}
-                  pagination={{
-                    pageSize: 10,
-                    showSizeChanger: true,
-                    showTotal: (total) => `Total ${total} members`,
-                  }}
-                />
+                {selectedOrganization.members && selectedOrganization.members.length > 0 ? (
+                  <Table
+                    columns={[
+                      {
+                        title: 'Member ID',
+                        dataIndex: 'member_id',
+                        key: 'member_id',
+                        render: (member_id: number) => (
+                          <span className="text-sm font-medium text-gray-900">{member_id}</span>
+                        ),
+                      },
+                      {
+                        title: 'Role',
+                        dataIndex: 'role',
+                        key: 'role',
+                        render: (role: string) => (
+                          <Tag color="blue" className="text-sm">
+                            {role.charAt(0).toUpperCase() + role.slice(1)}
+                          </Tag>
+                        ),
+                      },
+                      {
+                        title: 'Joined Date',
+                        dataIndex: 'joined_at',
+                        key: 'joined_at',
+                        render: (joined_at: string) => (
+                          <span className="text-sm text-gray-700">
+                            {new Date(joined_at).toLocaleDateString()}
+                          </span>
+                        ),
+                      },
+                    ]}
+                    dataSource={selectedOrganization.members}
+                    rowKey={(record) => `member-${record.member_id}`}
+                    pagination={{
+                      pageSize: 10,
+                      showSizeChanger: true,
+                      showTotal: (total) => `Total ${total} members`,
+                    }}
+                  />
+                ) : (
+                  <div className="text-center py-8 text-gray-500">
+                    <HiOutlineUsers className="h-12 w-12 mx-auto mb-4 text-gray-400" />
+                    <p>No members found in this organization</p>
+                  </div>
+                )}
               </div>
 
               <div className="pt-4 border-t border-gray-200 mt-4">
@@ -520,7 +591,6 @@ export default function DepartmentsPage() {
           </div>
         )}
       </Drawer>
-
       {/* Manage Organization Modal */}
       <Drawer
         open={showManageModal}
@@ -535,23 +605,52 @@ export default function DepartmentsPage() {
         {managingOrganization && (
           <div className="p-4 sm:p-6">
             <form
-              onSubmit={(e) => {
+              onSubmit={async (e) => {
                 e.preventDefault();
-                if (managingOrganization) {
-                  setDepartments((prev) =>
-                    prev.map((dept) =>
-                      dept.id === managingOrganization.id
-                        ? {
-                            ...dept,
-                            name: manageForm.name,
-                            leader: manageForm.leader,
-                            status: manageForm.status,
-                          }
-                        : dept
-                    )
-                  );
+                
+                try {
+                  const token = localStorage.getItem('auth_token');
+                  
+                  if (!token) {
+                    message.error('No authentication token found');
+                    return;
+                  }
+
+                  const payload = {
+                    organisation: {
+                      name: manageForm.name,
+                      description: manageForm.description,
+                      status: manageForm.status,
+                      organisation_members: managingOrganization!.members.map(member => ({
+                        member_id: member.member_id,
+                        role: member.role,
+                        joined_at: member.joined_at,
+                      })),
+                    },
+                  };
+
+                  const response = await apiRequest(`/organisations/${managingOrganization!.id}`, {
+                    method: 'PUT',
+                    headers: {
+                      'Authorization': `Bearer ${token}`,
+                    },
+                    body: JSON.stringify(payload),
+                  });
+
+                  if (response.error) {
+                    message.error(`Failed to update organization: ${response.error.message}`);
+                    return;
+                  }
+
+                  message.success('Organization updated successfully!');
                   setShowManageModal(false);
                   setManagingOrganization(null);
+                  
+                  // Refresh the organizations list
+                  await fetchOrganizations();
+                } catch (error) {
+                  console.error('Error updating organization:', error);
+                  message.error('Failed to update organization');
                 }
               }}
               className="space-y-4"
@@ -571,27 +670,16 @@ export default function DepartmentsPage() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Leader *
+                  Description *
                 </label>
-                <select
+                <textarea
+                  rows={3}
                   required
-                  value={manageForm.leader}
-                  onChange={(e) => setManageForm({ ...manageForm, leader: e.target.value })}
+                  value={manageForm.description}
+                  onChange={(e) => setManageForm({ ...manageForm, description: e.target.value })}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                >
-                  <option value="">Select Leader</option>
-                  <option>David Brown</option>
-                  <option>Sarah Williams</option>
-                  <option>Jane Smith</option>
-                  <option>Michael Johnson</option>
-                  <option>Robert Taylor</option>
-                  <option>Mary Johnson</option>
-                  <option>James Wilson</option>
-                  <option>Patricia Brown</option>
-                  <option>Emily Davis</option>
-                  <option>Linda Thompson</option>
-                  <option>Thomas Anderson</option>
-                </select>
+                  placeholder="Organization description"
+                />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -600,13 +688,11 @@ export default function DepartmentsPage() {
                 <select
                   required
                   value={manageForm.status}
-                  onChange={(e) =>
-                    setManageForm({ ...manageForm, status: e.target.value as 'Active' | 'Inactive' })
-                  }
+                  onChange={(e) => setManageForm({ ...manageForm, status: e.target.value })}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                 >
-                  <option value="Active">Active</option>
-                  <option value="Inactive">Inactive</option>
+                  <option value="active">Active</option>
+                  <option value="inactive">Inactive</option>
                 </select>
               </div>
               <div className="flex gap-3 pt-4 border-t border-gray-200">
@@ -629,7 +715,6 @@ export default function DepartmentsPage() {
           </div>
         )}
       </Drawer>
-
       {/* Create Organization Modal */}
       <Drawer
         open={showModal}
@@ -639,47 +724,50 @@ export default function DepartmentsPage() {
         width={typeof window !== 'undefined' && window.innerWidth < 640 ? '100%' : 600}
       >
         <div className="p-4 sm:p-6">
-          <form className="space-y-4">
+          <form 
+            onSubmit={(e) => {
+              e.preventDefault();
+              createOrganization(createForm);
+            }}
+            className="space-y-4"
+          >
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Organization Name *
               </label>
               <input
                 type="text"
+                required
+                value={createForm.name}
+                onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                 placeholder="e.g., Choir, Ushers, Youth"
               />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Description
+                Description *
               </label>
               <textarea
                 rows={3}
+                required
+                value={createForm.description}
+                onChange={(e) => setCreateForm({ ...createForm, description: e.target.value })}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                 placeholder="Organization description and purpose..."
               />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Leader *
-              </label>
-              <select className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent">
-                <option>Select Leader</option>
-                <option>John Doe</option>
-                <option>Jane Smith</option>
-                <option>Michael Johnson</option>
-                <option>Sarah Williams</option>
-                <option>David Brown</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
                 Status *
               </label>
-              <select className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent">
-                <option>Active</option>
-                <option>Inactive</option>
+              <select 
+                value={createForm.status}
+                onChange={(e) => setCreateForm({ ...createForm, status: e.target.value })}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              >
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
               </select>
             </div>
             <div className="flex gap-3 pt-4 border-t border-gray-200">
@@ -688,11 +776,23 @@ export default function DepartmentsPage() {
                 variant="outline"
                 onClick={() => setShowModal(false)}
                 className="flex-1"
+                disabled={creating}
               >
                 Cancel
               </Button>
-              <Button type="submit" className="flex-1">
-                Create Organization
+              <Button 
+                type="submit" 
+                className="flex-1"
+                disabled={creating}
+              >
+                {creating ? (
+                  <>
+                    <Spin indicator={<LoadingOutlined style={{ fontSize: 16 }} spin />} className="mr-2" />
+                    Creating...
+                  </>
+                ) : (
+                  'Create Organization'
+                )}
               </Button>
             </div>
           </form>

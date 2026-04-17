@@ -42,6 +42,11 @@ const allNavigation: NavItem[] = [
   { name: 'Organizations', href: '/dashboard/departments', icon: HiOutlineOfficeBuilding, permission: 'departments' },
   { name: 'Assets/Equipment', href: '/dashboard/assets', icon: HiOutlineCube, permission: 'assets' },
   { name: 'Add User', href: '/dashboard/users-and-roles', icon: HiOutlineUserAdd, permission: ['add_users', 'manage_roles'] },
+  { name: 'Tithes', href: '/dashboard/tithes', icon: HiReceiptRefund, permission: 'tithes' },
+  { name: 'Communication', href: '/dashboard/communication', icon: HiOutlineChatAlt, permission: 'communications' },
+  { name: 'Organizations', href: '/dashboard/departments', icon: HiOutlineOfficeBuilding, permission: 'organizations' },
+  { name: 'Assets/Equipment', href: '/dashboard/assets', icon: HiOutlineCube, permission: 'assets_or_equipment' },
+  { name: 'Users & Roles', href: '/dashboard/users-and-roles', icon: HiOutlineUserAdd, permission: ['add_user', 'create_role'] },
 ];
 
 export default function DashboardLayout({

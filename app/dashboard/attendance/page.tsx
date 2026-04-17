@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect } from "react";
 import {
   HiCheckCircle,
   HiOutlineCalendar,
@@ -19,10 +19,8 @@ import {
   Select,
   Button as AntButton,
   Drawer,
-  Table,
-  Pagination,
 } from "antd";
-import type { ColumnsType } from "antd/es/table";
+
 import {
   ManOutlined,
   WomanOutlined,
@@ -31,6 +29,8 @@ import {
 } from "@ant-design/icons";
 import dayjs, { Dayjs } from "dayjs";
 import { useAuth } from "@/lib/auth-context";
+import { useToast } from "@/lib/toast-context";
+import { apiRequest } from "@/lib/api";
 
 
 
@@ -45,162 +45,24 @@ interface AttendanceRecord {
   notes?: string;
 }
 
-const INITIAL_RECORDS: AttendanceRecord[] = [
-  {
-    id: 1,
-    service: "Sunday Service",
-    date: "2024-01-21",
-    men: 32,
-    women: 55,
-    children: 15,
-    total: 102,
-    notes: "Regular service",
-  },
-  {
-    id: 2,
-    service: "Sunday Service",
-    date: "2024-01-14",
-    men: 30,
-    women: 50,
-    children: 12,
-    total: 92,
-    notes: "Regular service",
-  },
-  {
-    id: 3,
-    service: "Sunday Service",
-    date: "2024-01-07",
-    men: 28,
-    women: 48,
-    children: 10,
-    total: 86,
-  },
-  {
-    id: 4,
-    service: "Sunday Service",
-    date: "2023-12-31",
-    men: 45,
-    women: 65,
-    children: 20,
-    total: 130,
-    notes: "New Year's Eve service",
-  },
-  {
-    id: 5,
-    service: "Sunday Service",
-    date: "2023-12-24",
-    men: 60,
-    women: 80,
-    children: 35,
-    total: 175,
-    notes: "Christmas Eve service",
-  },
-  {
-    id: 6,
-    service: "Midweek Service",
-    date: "2024-01-17",
-    men: 18,
-    women: 28,
-    children: 6,
-    total: 52,
-  },
-  {
-    id: 7,
-    service: "Midweek Service",
-    date: "2024-01-10",
-    men: 15,
-    women: 25,
-    children: 5,
-    total: 45,
-  },
-  {
-    id: 8,
-    service: "Midweek Service",
-    date: "2024-01-03",
-    men: 12,
-    women: 22,
-    children: 4,
-    total: 38,
-  },
-  {
-    id: 9,
-    service: "Midweek Service",
-    date: "2023-12-27",
-    men: 10,
-    women: 18,
-    children: 3,
-    total: 31,
-  },
-  {
-    id: 10,
-    service: "Youth Meeting",
-    date: "2024-01-19",
-    men: 10,
-    women: 15,
-    children: 18,
-    total: 43,
-  },
-  {
-    id: 11,
-    service: "Youth Meeting",
-    date: "2024-01-12",
-    men: 8,
-    women: 12,
-    children: 15,
-    total: 35,
-  },
-  {
-    id: 12,
-    service: "Youth Meeting",
-    date: "2024-01-05",
-    men: 9,
-    women: 14,
-    children: 16,
-    total: 39,
-  },
-  {
-    id: 13,
-    service: "Daily Mass",
-    date: "2024-01-20",
-    men: 5,
-    women: 12,
-    children: 2,
-    total: 19,
-  },
-  {
-    id: 14,
-    service: "Daily Mass",
-    date: "2024-01-19",
-    men: 6,
-    women: 14,
-    children: 3,
-    total: 23,
-  },
-  {
-    id: 15,
-    service: "Daily Mass",
-    date: "2024-01-18",
-    men: 4,
-    women: 10,
-    children: 1,
-    total: 15,
-  },
-  {
-    id: 16,
-    service: "Daily Mass",
-    date: "2024-01-17",
-    men: 7,
-    women: 15,
-    children: 4,
-    total: 26,
-  },
-];
+// Backend attendance interface to match API response
+interface BackendAttendance {
+  id: number;
+  service_type: string;
+  men: number;
+  women: number;
+  children: number;
+  total: number;
+  additional_notes?: string;
+  // Note: date field is missing from backend response
+}
+
 
 const SERVICES = [
-  { id: "evening", name: "Evening Service" },
-  { id: "1st", name: "1st Service" },
-  { id: "2nd", name: "2nd Service" },
-  { id: "joint", name: "Joint Service" },
+  { id: "evening_service", name: "Evening Service" },
+  { id: "first_service", name: "1st Service" },
+  { id: "second_service", name: "2nd Service" },
+  { id: "joint_service", name: "Joint Service" },
 ];
 
 const PATTERN_STYLES = [
@@ -218,11 +80,80 @@ const PATTERN_STYLES = [
   },
 ];
 
+
+
 export default function AttendancePage() {
   const { hasPermission, isSuperAdmin } = useAuth();
-  const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>(INITIAL_RECORDS);
+  const { showToast } = useToast();
+  const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
   const [showRecordModal, setShowRecordModal] = useState(false);
   const [form] = Form.useForm();
+
+  // Convert backend attendance to frontend format
+  const mapBackendAttendance = (backendAttendance: BackendAttendance): AttendanceRecord => {
+    // Map service type to display name
+    const serviceMap: Record<string, string> = {
+      'evening_service': 'Evening Service',
+      'first_service': '1st Service',
+      'second_service': '2nd Service',
+      'joint_service': 'Joint Service',
+    };
+
+    return {
+      id: backendAttendance.id,
+      service: serviceMap[backendAttendance.service_type] || backendAttendance.service_type,
+      date: new Date().toISOString().split('T')[0], // Use current date since backend doesn't provide it
+      men: backendAttendance.men,
+      women: backendAttendance.women,
+      children: backendAttendance.children,
+      total: backendAttendance.total, // Use backend total instead of calculating
+      notes: backendAttendance.additional_notes,
+    };
+  };
+
+  // Fetch attendance records from API
+  const fetchAttendanceRecords = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const token = localStorage.getItem('auth_token');
+      if (!token) {
+        setError('No authentication token found');
+        return;
+      }
+
+      const response = await apiRequest<{ attendances: BackendAttendance[] }>('attendances', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (response.data && response.data.attendances && Array.isArray(response.data.attendances)) {
+        const mappedAttendance = response.data.attendances.map(mapBackendAttendance);
+        setAttendanceRecords(mappedAttendance);
+      } else if (response.error) {
+        console.error('Failed to fetch attendance records:', response.error);
+        setError(response.error.message || 'Failed to fetch attendance records');
+      } else {
+        console.warn('Unexpected API response format:', response);
+        setAttendanceRecords([]); // Set empty array instead of error
+      }
+    } catch (error) {
+      console.error('Error fetching attendance records:', error);
+      setError('Network error occurred while fetching attendance records');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fetch attendance records on component mount
+  useEffect(() => {
+    fetchAttendanceRecords();
+  }, []);
 
   // Calculate totals safely
   const stats = useMemo(() => {
@@ -239,7 +170,7 @@ export default function AttendancePage() {
   }, [attendanceRecords]);
 
   const handleRecordAttendance = useCallback(
-    (values: {
+    async (values: {
       service: string;
       date: Dayjs;
       men: number;
@@ -247,28 +178,61 @@ export default function AttendancePage() {
       children: number;
       notes?: string;
     }) => {
-      const service = SERVICES.find((s) => s.id === values.service);
-      const men = Number(values.men) || 0;
-      const women = Number(values.women) || 0;
-      const children = Number(values.children) || 0;
-      const total = men + women + children;
+      try {
+        setSubmitting(true);
 
-      const newRecord: AttendanceRecord = {
-        id: Date.now(),
-        service: service?.name || values.service,
-        date: values.date.format("YYYY-MM-DD"),
-        men,
-        women,
-        children,
-        total,
-        notes: values.notes,
-      };
+        // Prepare the API payload according to the backend structure
+        const attendancePayload = {
+          attendance: {
+            service_type: values.service,
+            date: values.date.format("YYYY-MM-DD"),
+            men: Number(values.men) || 0,
+            women: Number(values.women) || 0,
+            children: Number(values.children) || 0,
+            additional_notes: values.notes || '',
+          }
+        };
 
-      setAttendanceRecords((prev) => [...(Array.isArray(prev) ? prev : []), newRecord]);
-      setShowRecordModal(false);
-      form.resetFields();
+        // Get authentication token
+        const token = localStorage.getItem('auth_token');
+        if (!token) {
+          throw new Error('No authentication token found');
+        }
+
+        const response = await apiRequest('attendances', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(attendancePayload),
+        });
+
+        if (response.error) {
+          throw new Error(response.error.message || 'Failed to record attendance');
+        }
+
+        // Success - refresh the attendance records
+        await fetchAttendanceRecords();
+
+        // Close modal and reset form
+        setShowRecordModal(false);
+        form.resetFields();
+
+        // Show success message
+        showToast('Attendance recorded successfully!', 'success');
+
+      } catch (error) {
+        console.error('Error recording attendance:', error);
+        showToast(
+          error instanceof Error ? error.message : 'Failed to record attendance',
+          'error'
+        );
+      } finally {
+        setSubmitting(false);
+      }
     },
-    [form]
+    [form, showToast]
   );
 
   const handleCloseModal = useCallback(() => {
@@ -276,108 +240,59 @@ export default function AttendancePage() {
     form.resetFields();
   }, [form]);
 
-  // Safely sorted records (newest first)
-  const sortedRecords = useMemo<AttendanceRecord[]>(() => {
-    if (!attendanceRecords || !Array.isArray(attendanceRecords)) {
-      return [];
-    }
-    const records = [...attendanceRecords];
-    return records.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [attendanceRecords]);
 
-  // Ensure dataSource is always a valid array
-  const tableData = useMemo<AttendanceRecord[]>(() => {
-    if (!sortedRecords || !Array.isArray(sortedRecords)) {
-      return [];
-    }
-    return sortedRecords;
-  }, [sortedRecords]);
 
-  const attendanceColumns: ColumnsType<AttendanceRecord> = [
-    {
-      title: "Date",
-      dataIndex: "date",
-      key: "date",
-      render: (date: string) => (
-        <div className="flex items-center gap-2 text-sm text-gray-900">
-          <HiOutlineCalendar className="h-4 w-4 text-gray-400" />
-          {new Date(date).toLocaleDateString()}
-        </div>
-      ),
-      sorter: (a, b) => {
-        const dateA = new Date(a.date).getTime();
-        const dateB = new Date(b.date).getTime();
-        return dateA - dateB;
-      },
-      defaultSortOrder: "descend",
-    },
-    {
-      title: "Service",
-      dataIndex: "service",
-      key: "service",
-      render: (service: string) => (
-        <span className="text-sm font-medium text-gray-900">{service}</span>
-      ),
-    },
-    {
-      title: "Men",
-      dataIndex: "men",
-      key: "men",
-      align: "right",
-      render: (men: number) => (
-        <div className="flex items-center justify-end gap-2">
-          <ManOutlined className="h-4 w-4 text-gray-500" />
-          <span className="text-sm font-semibold text-gray-900">{men}</span>
-        </div>
-      ),
-      sorter: (a, b) => a.men - b.men,
-    },
-    {
-      title: "Women",
-      dataIndex: "women",
-      key: "women",
-      align: "right",
-      render: (women: number) => (
-        <div className="flex items-center justify-end gap-2">
-          <WomanOutlined className="h-4 w-4 text-gray-500" />
-          <span className="text-sm font-semibold text-gray-900">{women}</span>
-        </div>
-      ),
-      sorter: (a, b) => a.women - b.women,
-    },
-    {
-      title: "Children",
-      dataIndex: "children",
-      key: "children",
-      align: "right",
-      render: (children: number) => (
-        <div className="flex items-center justify-end gap-2">
-          <UserOutlined className="h-4 w-4 text-gray-500" />
-          <span className="text-sm font-semibold text-gray-900">{children}</span>
-        </div>
-      ),
-      sorter: (a, b) => a.children - b.children,
-    },
-    {
-      title: "Total",
-      dataIndex: "total",
-      key: "total",
-      align: "right",
-      render: (total: number) => (
-        <span className="text-sm font-bold text-green-600">{total}</span>
-      ),
-      sorter: (a, b) => a.total - b.total,
-    },
-    {
-      title: "Notes",
-      dataIndex: "notes",
-      key: "notes",
-      render: (notes?: string) => (
-        <span className="text-sm text-gray-500">{notes || "-"}</span>
-      ),
-    },
-  ];
 
+
+  // Loading state
+  if (loading) {
+    return (
+      <div className="space-y-4 sm:space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
+              Attendance Management
+            </h1>
+            <p className="text-sm sm:text-base text-gray-600 mt-1">Track and record attendance by category</p>
+          </div>
+        </div>
+        <div className="flex items-center justify-center py-12">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto mb-4"></div>
+            <p className="text-gray-500">Loading attendance records...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div className="space-y-4 sm:space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
+              Attendance Management
+            </h1>
+            <p className="text-sm sm:text-base text-gray-600 mt-1">Track and record attendance by category</p>
+          </div>
+        </div>
+        <div className="flex items-center justify-center py-12">
+          <div className="text-center">
+            <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <HiOutlineUsers className="h-8 w-8 text-red-600" />
+            </div>
+            <h3 className="text-lg font-medium text-gray-900 mb-1">Failed to load attendance records</h3>
+            <p className="text-gray-500 mb-4">{error}</p>
+            <Button onClick={fetchAttendanceRecords} variant="outline">
+              Try Again
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
       <div className="space-y-4 sm:space-y-6">
@@ -389,18 +304,27 @@ export default function AttendancePage() {
             </h1>
             <p className="text-sm sm:text-base text-gray-600 mt-1">Track and record attendance by category</p>
           </div>
-          {(hasPermission('attendance') || isSuperAdmin) && (
+          <div className="flex gap-2">
             <Button
-              onClick={() => {
-                form.resetFields();
-                setShowRecordModal(true);
-              }}
-              className="shadow-lg w-full sm:w-auto"
+              onClick={fetchAttendanceRecords}
+              variant="outline"
+              disabled={loading}
             >
-              <PlusOutlined className="mr-2" />
-              Record Attendance
+              Refresh
             </Button>
-          )}
+            {(hasPermission('attendance') || isSuperAdmin) && (
+              <Button
+                onClick={() => {
+                  form.resetFields();
+                  setShowRecordModal(true);
+                }}
+                className="shadow-lg w-full sm:w-auto"
+              >
+                <PlusOutlined className="mr-2" />
+                Record Attendance
+              </Button>
+            )}
+          </div>
         </div>
 
         {/* Statistics Cards */}
@@ -471,17 +395,77 @@ export default function AttendancePage() {
         <Card className="relative overflow-hidden">
           <CardHeader className="pb-4 relative z-10">
             <CardTitle className="text-base font-semibold text-gray-900">
-              Attendance History
+              Attendance History ({attendanceRecords.length} records)
             </CardTitle>
           </CardHeader>
           <CardContent className="relative z-10 overflow-x-auto">
-            <Table
-              columns={attendanceColumns}
-              dataSource={[]}
-              rowKey={(record) => `attendance-${record.id}`}
-              pagination={false}
-              scroll={{ x: 'max-content' }}
-            />
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Service Type
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Men
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Women
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Children
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Total
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Notes
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {attendanceRecords.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="px-6 py-4 text-center text-gray-500">
+                        No attendance records found
+                      </td>
+                    </tr>
+                  ) : (
+                    attendanceRecords.map((record) => (
+                      <tr key={record.id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                          {record.service}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          <div className="flex items-center gap-2">
+                            <ManOutlined className="h-4 w-4 text-gray-500" />
+                            {record.men}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          <div className="flex items-center gap-2">
+                            <WomanOutlined className="h-4 w-4 text-gray-500" />
+                            {record.women}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          <div className="flex items-center gap-2">
+                            <UserOutlined className="h-4 w-4 text-gray-500" />
+                            {record.children}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-green-600">
+                          {record.total}
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-500 max-w-xs truncate">
+                          {record.notes || "-"}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
           </CardContent>
         </Card>
 
@@ -505,7 +489,7 @@ export default function AttendancePage() {
               onFinish={handleRecordAttendance}
               initialValues={{
                 date: dayjs(),
-                service: "1st",
+                service: "first_service",
                 men: 0,
                 women: 0,
                 children: 0,
@@ -620,6 +604,7 @@ export default function AttendancePage() {
                 <AntButton
                   type="primary"
                   htmlType="submit"
+                  loading={submitting}
                   className="flex-1 w-full sm:w-auto bg-green-600 hover:bg-green-700"
                   size="large"
                   icon={<PlusOutlined />}

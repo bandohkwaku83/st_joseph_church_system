@@ -1,34 +1,34 @@
 
 export const PERMISSION_KEYS = [
   'dashboard',
-  'members',
-  'attendance',
-  'record_income',
-  'expenditure',
-  'generate_report',
+  'add_user',
+  'assets_or_equipment',
+  'communications',
   'tithes',
-  'communication',
-  'departments',
-  'assets',
-  'add_users',
-  'manage_roles',
+  'generate_report',
+  'expenditure',
+  'record_income',
+  'attendance',
+  'members',
+  'create_role',
+  'organizations',
 ] as const;
 
 export type PermissionKey = (typeof PERMISSION_KEYS)[number];
 
 export const PERMISSION_LABELS: Record<PermissionKey, string> = {
   dashboard: 'Dashboard',
-  members: 'Members',
-  attendance: 'Attendance',
-  record_income: 'Record Income',
-  expenditure: 'Expenditure',
-  generate_report: 'Generate Report',
+  add_user: 'Add Users',
+  assets_or_equipment: 'Assets/Equipment',
+  communications: 'Communications',
   tithes: 'Tithes',
-  communication: 'Communication',
-  departments: 'Organizations',
-  assets: 'Assets/Equipment',
-  add_users: 'Add Users',
-  manage_roles: 'Manage Roles',
+  generate_report: 'Generate Report',
+  expenditure: 'Expenditure',
+  record_income: 'Record Income',
+  attendance: 'Attendance',
+  members: 'Members',
+  create_role: 'Create Role',
+  organizations: 'Organizations',
 };
 
 /** Role stored in DB / localStorage. Head Pastor role is system-built-in. */
@@ -36,7 +36,7 @@ export interface Role {
   id: string;
   name: string;
   permissionKeys: PermissionKey[];
-  isSystemRole?: boolean; // true = Head Pastor, cannot delete or remove manage_roles
+  isSystemRole?: boolean; // true = Head Pastor, cannot delete or remove create_role
 }
 
 /** User as stored (with password for demo; use hashed in production). */
@@ -63,7 +63,7 @@ export function getDefaultRoles(): Role[] {
     'tithes',
   ];
   const churchAdminPermissions: PermissionKey[] = PERMISSION_KEYS.filter(
-    (k) => k !== 'manage_roles'
+    (k) => k !== 'create_role'
   );
   return [
     {
@@ -80,7 +80,7 @@ export function getDefaultRoles(): Role[] {
     },
     {
       id: FINANCE_OFFICER_ROLE_ID,
-      name: 'Financial',
+      name: 'Finance Officer',
       permissionKeys: financePermissions,
       isSystemRole: false,
     },

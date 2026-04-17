@@ -20,7 +20,7 @@ import {
   HEAD_PASTOR_ROLE_ID,
   ALL_PERMISSION_KEYS,
 } from '@/lib/rbac';
-import { apiFetch } from '@/lib/api';
+import { apiFetch, apiRequest } from '@/lib/api';
 
 /** Local-only auth: pastor (admin) login credentials */
 const PASTOR_USERNAME = 'testPastor';
@@ -35,6 +35,7 @@ export interface User {
   roleId: string;
   roleName: string;
   initials: string;
+  permissions?: string[]; // Add permissions directly to user object
 }
 
 /** User for list display (no password) */
@@ -49,13 +50,14 @@ export interface UserSummary {
 
 /** Backend API user shape (used for users list when backend is present) */
 interface BackendUser {
-  id: string;
+  id: string | number;
   username: string;
-  name: string;
-  role: 'admin' | 'user';
-  roleId?: string;
+  name?: string; // Optional since your backend doesn't include it
+  role: 'admin' | 'user' | 'church_admin' | 'head_pastor' | 'finance' | 'financial';
+  roleId?: string | number; // Can be string or number from backend
   email?: string;
   initials?: string;
+  permissions?: string[]; // Your backend includes permissions array
 }
 
 interface AuthContextType {
@@ -139,23 +141,59 @@ function storedUserToUser(u: StoredUser, roles: Role[]): User {
 
 function backendUserToUser(b: BackendUser): User {
   const roles = getDefaultRoles();
-  const roleId =
-    b.roleId ?? (b.role === 'admin' ? HEAD_PASTOR_ROLE_ID : 'role_church_admin');
+  
+  // Map backend role ID to frontend role system
+  let roleId: string;
+  if (b.role === 'church_admin' || b.roleId === '1') {
+    roleId = 'role_church_admin';
+  } else if (b.role === 'admin' || b.role === 'head_pastor' || b.roleId === '2') {
+    roleId = HEAD_PASTOR_ROLE_ID;
+  } else if (b.role === 'finance' || b.role === 'financial' || b.roleId === '3') {
+    roleId = 'role_finance_officer';
+  } else {
+    // Default fallback
+    roleId = 'role_church_admin';
+  }
+  
   const role = roles.find((r) => r.id === roleId);
+  
+  // Use username as display name since your backend doesn't provide a separate name field
+  const displayName = b.name || b.username || 'Unknown User';
+  const username = b.username || 'unknown';
+  
+  // Generate initials from username if no name is provided
   const initials =
     b.initials ??
-    (b.name.trim().split(/\s+/).length >= 2
-      ? (b.name.trim().split(/\s+/)[0][0] +
-          b.name.trim().split(/\s+/).pop()![0]).toUpperCase()
-      : b.name.slice(0, 2).toUpperCase() || b.username.slice(0, 2).toUpperCase());
-  return {
-    id: b.id,
-    name: b.name,
-    email: b.email ?? b.username,
+    (displayName.trim().split(/\s+/).length >= 2
+      ? (displayName.trim().split(/\s+/)[0][0] +
+          displayName.trim().split(/\s+/).pop()![0]).toUpperCase()
+      : displayName.slice(0, 2).toUpperCase());
+      
+  const user = {
+    id: String(b.id),
+    name: displayName,
+    email: b.email ?? username,
     roleId,
-    roleName: role?.name ?? (b.role === 'admin' ? 'Head Pastor' : 'User'),
+    roleName: role?.name ?? getRoleNameFromId(roleId),
     initials,
+    permissions: b.permissions || [], // Include permissions directly in user object
   };
+  
+  return user;
+}
+
+// Helper function to get role name from role ID
+function getRoleNameFromId(roleId: string): string {
+  switch (roleId) {
+    case HEAD_PASTOR_ROLE_ID:
+      return 'Head Pastor';
+    case 'role_church_admin':
+      return 'Church Admin';
+    case 'role_finance_officer':
+      return 'Finance Officer';
+    default:
+      return 'Church Admin';
+  }
 }
 
 /** Local pastor user for admin login (no backend). */
@@ -174,21 +212,43 @@ function getPastorUser(): User {
 
 function normalizeBackendUser(data: unknown): BackendUser | null {
   if (!data || typeof data !== 'object') return null;
-  const o = data as Record<string, unknown>;
-  const user = (o.user as BackendUser) ?? (o as unknown as BackendUser);
+  const user = data as Record<string, unknown>;
+  
   if (
-    typeof user?.id === 'string' &&
-    typeof user?.username === 'string' &&
-    typeof user?.name === 'string'
+    (typeof user.id === 'string' || typeof user.id === 'number') &&
+    typeof user.username === 'string'
   ) {
+    // Handle role mapping from numeric IDs
+    let role: BackendUser['role'] = 'church_admin'; // default
+    if (user.role) {
+      role = user.role as BackendUser['role'];
+    } else if (user.roleId) {
+      // Map numeric role IDs to role names
+      const roleIdNum = Number(user.roleId);
+      switch (roleIdNum) {
+        case 1:
+          role = 'church_admin';
+          break;
+        case 2:
+          role = 'head_pastor';
+          break;
+        case 3:
+          role = 'finance';
+          break;
+        default:
+          role = 'church_admin';
+      }
+    }
+    
     return {
-      id: user.id,
+      id: String(user.id),
       username: user.username,
-      name: user.name,
-      role: user.role === 'user' ? 'user' : 'admin',
-      roleId: typeof user.roleId === 'string' ? user.roleId : undefined,
+      name: typeof user.name === 'string' ? user.name : user.username,
+      role: role,
+      roleId: typeof user.roleId === 'string' || typeof user.roleId === 'number' ? String(user.roleId) : undefined,
       email: typeof user.email === 'string' ? user.email : undefined,
       initials: typeof user.initials === 'string' ? user.initials : undefined,
+      permissions: Array.isArray(user.permissions) ? user.permissions : undefined,
     };
   }
   return null;
@@ -212,14 +272,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
 
   const fetchUsers = useCallback(async () => {
-    const res = await apiFetch('/api/users');
-    if (res.status === 401) {
-      setUser(null);
-      return;
+    try {
+      const token = localStorage.getItem('auth_token');
+      if (!token) {
+        console.warn('No auth token available for users request');
+        return;
+      }
+      
+      const response = await apiRequest<{ users: BackendUser[] }>('users', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+      
+      if (response.data && response.data.users) {
+        setBackendUsers(response.data.users);
+      } else if (response.error) {
+        console.warn('Failed to fetch users:', response.error.message);
+        // Don't throw error, just continue without users list
+      } else {
+        console.warn('Unexpected users API response format:', response);
+      }
+    } catch (error) {
+      console.warn('Failed to fetch users list:', error);
+      // Don't throw error, just continue without users list
     }
-    if (!res.ok) return;
-    const data = await res.json();
-    setBackendUsers(normalizeBackendUsersList(data));
   }, []);
 
   const refreshRolesAndUsers = useCallback(() => {
@@ -231,19 +308,51 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setRoles(loadRoles());
   }, []);
 
-  // Restore session from localStorage (no backend)
+  // Restore session from localStorage or API
   useEffect(() => {
-    if (typeof window === 'undefined') {
+    const restoreSession = async () => {
+      if (typeof window === 'undefined') {
+        setAuthLoading(false);
+        return;
+      }
+      
+      const session = localStorage.getItem(AUTH_SESSION_KEY);
+      const token = localStorage.getItem('auth_token');
+      
+      if (session === 'api_authenticated' && token) {
+        // Restore session from stored user data
+        try {
+          const storedUserData = localStorage.getItem('auth_user_data');
+          if (storedUserData) {
+            const user = JSON.parse(storedUserData) as User;
+            setUser(user);
+          } else {
+            // No stored user data, clear session
+            localStorage.removeItem(AUTH_SESSION_KEY);
+            localStorage.removeItem('auth_token');
+            localStorage.removeItem('auth_token_expires');
+            setUser(null);
+          }
+        } catch (error) {
+          console.warn('Session restoration failed:', error);
+          // Clear invalid session
+          localStorage.removeItem(AUTH_SESSION_KEY);
+          localStorage.removeItem('auth_token');
+          localStorage.removeItem('auth_token_expires');
+          localStorage.removeItem('auth_user_data');
+          setUser(null);
+        }
+      } else if (session === 'pastor') {
+        // Restore hardcoded session
+        setUser(getPastorUser());
+      } else {
+        setUser(null);
+      }
+      
       setAuthLoading(false);
-      return;
-    }
-    const session = localStorage.getItem(AUTH_SESSION_KEY);
-    if (session === 'pastor') {
-      setUser(getPastorUser());
-    } else {
-      setUser(null);
-    }
-    setAuthLoading(false);
+    };
+    
+    restoreSession();
   }, []);
 
   // When user is set, fetch users list (for admin)
@@ -258,6 +367,63 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = useCallback(
     async (username: string, password: string): Promise<boolean> => {
       const u = username.trim();
+      
+      // Check if API is configured
+      const apiBase = process.env.NEXT_PUBLIC_API_URL;
+      
+      if (apiBase) {
+        // Use real API authentication
+        try {
+          const response = await apiRequest<{
+            token: string;
+            user: BackendUser;
+            message?: string;
+            status?: string;
+          }>('login', {
+            method: 'POST',
+            body: JSON.stringify({
+              username: u,
+              password: password,
+            }),
+          });
+          
+          if (response.data) {
+            // Store token and user data for session restoration
+            if (response.data.token) {
+              localStorage.setItem('auth_token', response.data.token);
+              if (response.data.expiresAt) {
+                localStorage.setItem('auth_token_expires', response.data.expiresAt);
+              }
+            }
+            
+            // Convert backend user to local user format
+            const user = backendUserToUser(response.data.user);
+            
+            // Store user data for session restoration
+            localStorage.setItem('auth_user_data', JSON.stringify(user));
+            
+            setUser(user);
+            
+            if (typeof window !== 'undefined') {
+              localStorage.setItem(AUTH_SESSION_KEY, 'api_authenticated');
+            }
+            
+            return true;
+          } else if (response.error) {
+            console.warn('Login failed:', response.error.message);
+            return false;
+          } else {
+            // No data and no error - unexpected response
+            console.warn('Unexpected login response:', response);
+            return false;
+          }
+        } catch (error) {
+          console.error('Login API error:', error);
+          // Fall through to hardcoded fallback in development
+        }
+      }
+      
+      // Fallback to hardcoded authentication for development
       if (u === PASTOR_USERNAME && password === PASTOR_PASSWORD) {
         setUser(getPastorUser());
         if (typeof window !== 'undefined') {
@@ -265,15 +431,47 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
         return true;
       }
+      
       return false;
     },
     []
   );
 
   const logout = useCallback(async () => {
+    const token = localStorage.getItem('auth_token');
+    
+    // If we have an API token, try to logout via API
+    if (token) {
+      try {
+        console.log('Attempting API logout...');
+        
+        // Try the most common logout endpoint first
+        const response = await apiRequest('logout', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        });
+        
+        if (response.status === 200 || response.status === 204) {
+          console.log('API logout successful');
+        } else {
+          console.warn('API logout returned status:', response.status);
+        }
+      } catch (error) {
+        console.warn('API logout failed:', error);
+        // Continue with local cleanup even if API call fails
+      }
+    }
+    
+    // Always clear local storage
     if (typeof window !== 'undefined') {
       localStorage.removeItem(AUTH_SESSION_KEY);
+      localStorage.removeItem('auth_token');
+      localStorage.removeItem('auth_token_expires');
+      localStorage.removeItem('auth_user_data');
     }
+    
     setUser(null);
     router.push('/signin');
   }, [router]);
@@ -286,16 +484,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const hasPermission = useCallback(
     (key: PermissionKey): boolean => {
       if (!user) return false;
-      if (user.roleId === HEAD_PASTOR_ROLE_ID) return true;
-      const role = getRole(user.roleId);
-      if (!role) return false;
-      return role.permissionKeys.includes(key);
+      
+      // Map legacy permission keys to new ones for backward compatibility
+      const legacyMapping: Record<string, PermissionKey> = {
+        'add_users': 'add_user',
+        'manage_roles': 'create_role',
+        'communication': 'communications',
+        'departments': 'organizations',
+        'assets': 'assets_or_equipment',
+      };
+      
+      const mappedKey = legacyMapping[key] || key;
+      
+      // Check user's permissions directly (from login response)
+      if (user.permissions && user.permissions.length > 0) {
+        return user.permissions.includes(mappedKey) || 
+               user.permissions.includes(key) ||
+               // Check reverse mapping too
+               Object.entries(legacyMapping).some(([legacy, modern]) => 
+                 (key === legacy && user.permissions!.includes(modern)) ||
+                 (key === modern && user.permissions!.includes(legacy))
+               );
+      }
+      
+      // If user has no permissions, deny access
+      return false;
     },
-    [user, getRole]
+    [user]
   );
 
   const isSuperAdmin = useCallback(
-    (): boolean => user?.roleId === HEAD_PASTOR_ROLE_ID,
+    (): boolean => {
+      // A super admin is someone who has all permissions or is explicitly marked as head pastor with permissions
+      if (!user || !user.permissions) return false;
+      
+      // Check if user has all critical admin permissions
+      const adminPermissions = ['create_role', 'add_user'];
+      return adminPermissions.every(permission => user.permissions!.includes(permission));
+    },
     [user]
   );
 
@@ -318,44 +544,71 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const getRoles = useCallback((): Role[] => roles, [roles]);
   const getUsers = useCallback((): UserSummary[] => {
     return backendUsers.map((u) => {
-      const role = roles.find((r) => r.id === (u.roleId ?? ''));
-      const roleName =
-        role?.name ??
-        (u.role === 'admin' ? 'Head Pastor' : 'User');
+      // Map backend role to frontend role ID
+      let roleId: string;
+      if (u.role === 'church_admin' || u.roleId === '1') {
+        roleId = 'role_church_admin';
+      } else if (u.role === 'head_pastor' || u.role === 'admin' || u.roleId === '2') {
+        roleId = HEAD_PASTOR_ROLE_ID;
+      } else if (u.role === 'finance' || u.roleId === '3') {
+        roleId = 'role_finance_officer';
+      } else {
+        roleId = 'role_church_admin'; // default
+      }
+      
+      const role = roles.find((r) => r.id === roleId);
+      const roleName = role?.name ?? getRoleNameFromId(roleId);
+      
+      const displayName = u.name || u.username || 'Unknown User';
+      
       return {
-        id: u.id,
-        name: u.name,
+        id: String(u.id),
+        name: displayName,
         email: u.email ?? u.username,
-        roleId: u.roleId ?? (u.role === 'admin' ? HEAD_PASTOR_ROLE_ID : 'role_church_admin'),
+        roleId: roleId,
         roleName,
         initials:
           u.initials ??
-          (u.name.trim().split(/\s+/).length >= 2
-            ? (u.name.trim().split(/\s+/)[0][0] +
-                u.name.trim().split(/\s+/).pop()![0]).toUpperCase()
-            : u.name.slice(0, 2).toUpperCase() || u.username.slice(0, 2).toUpperCase()),
+          (displayName.trim().split(/\s+/).length >= 2
+            ? (displayName.trim().split(/\s+/)[0][0] +
+                displayName.trim().split(/\s+/).pop()![0]).toUpperCase()
+            : displayName.slice(0, 2).toUpperCase() || u.username.slice(0, 2).toUpperCase()),
       };
     });
   }, [backendUsers, roles]);
 
   const getStoredUser = useCallback(
     (id: string): StoredUser | undefined => {
-      const u = backendUsers.find((x) => x.id === id);
+      const u = backendUsers.find((x) => String(x.id) === id);
       if (!u) return undefined;
-      const roleId = u.roleId ?? (u.role === 'admin' ? HEAD_PASTOR_ROLE_ID : 'role_church_admin');
+      
+      // Map backend role to frontend role ID
+      let roleId: string;
+      if (u.role === 'church_admin' || u.roleId === '1') {
+        roleId = 'role_church_admin';
+      } else if (u.role === 'head_pastor' || u.role === 'admin' || u.roleId === '2') {
+        roleId = HEAD_PASTOR_ROLE_ID;
+      } else if (u.role === 'finance' || u.roleId === '3') {
+        roleId = 'role_finance_officer';
+      } else {
+        roleId = 'role_church_admin'; // default
+      }
+      
       const role = roles.find((r) => r.id === roleId);
+      const displayName = u.name || u.username || 'Unknown User';
+      
       return {
-        id: u.id,
-        name: u.name,
+        id: String(u.id),
+        name: displayName,
         email: u.email ?? u.username,
         roleId,
         password: '',
         initials:
           u.initials ??
-          (u.name.trim().split(/\s+/).length >= 2
-            ? (u.name.trim().split(/\s+/)[0][0] +
-                u.name.trim().split(/\s+/).pop()![0]).toUpperCase()
-            : u.name.slice(0, 2).toUpperCase() || u.username.slice(0, 2).toUpperCase()),
+          (displayName.trim().split(/\s+/).length >= 2
+            ? (displayName.trim().split(/\s+/)[0][0] +
+                displayName.trim().split(/\s+/).pop()![0]).toUpperCase()
+            : displayName.slice(0, 2).toUpperCase() || u.username.slice(0, 2).toUpperCase()),
       };
     },
     [backendUsers, roles]
@@ -464,16 +717,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const usersForContext = useMemo((): StoredUser[] => {
     return backendUsers.map((u) => {
-      const roleId = u.roleId ?? (u.role === 'admin' ? HEAD_PASTOR_ROLE_ID : 'role_church_admin');
+      // Map backend role to frontend role ID
+      let roleId: string;
+      if (u.role === 'church_admin' || u.roleId === '1') {
+        roleId = 'role_church_admin';
+      } else if (u.role === 'head_pastor' || u.role === 'admin' || u.roleId === '2') {
+        roleId = HEAD_PASTOR_ROLE_ID;
+      } else if (u.role === 'finance' || u.roleId === '3') {
+        roleId = 'role_finance_officer';
+      } else {
+        roleId = 'role_church_admin'; // default
+      }
+      
+      const displayName = u.name || u.username || 'Unknown User';
+      
       const initials =
         u.initials ??
-        (u.name.trim().split(/\s+/).length >= 2
-          ? (u.name.trim().split(/\s+/)[0][0] +
-              u.name.trim().split(/\s+/).pop()![0]).toUpperCase()
-          : u.name.slice(0, 2).toUpperCase() || u.username.slice(0, 2).toUpperCase());
+        (displayName.trim().split(/\s+/).length >= 2
+          ? (displayName.trim().split(/\s+/)[0][0] +
+              displayName.trim().split(/\s+/).pop()![0]).toUpperCase()
+          : displayName.slice(0, 2).toUpperCase() || u.username.slice(0, 2).toUpperCase());
       return {
-        id: u.id,
-        name: u.name,
+        id: String(u.id),
+        name: displayName,
         email: u.email ?? u.username,
         roleId,
         password: '',

@@ -27,6 +27,7 @@ export default function SignInPage() {
     setLoading(true);
     try {
       const success = await login(username, password);
+      
       if (success) {
         showToast('Sign in successful!', 'success');
         router.push('/dashboard');
@@ -34,6 +35,7 @@ export default function SignInPage() {
         showToast('Invalid username or password. Please try again.', 'error');
       }
     } catch (error) {
+      console.error('Login error:', error);
       showToast('An error occurred. Please try again.', 'error');
     } finally {
       setLoading(false);

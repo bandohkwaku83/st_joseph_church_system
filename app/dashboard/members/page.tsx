@@ -15,6 +15,8 @@ import type { UploadFile, UploadProps } from 'antd';
 import { SearchOutlined, FilterOutlined, DownloadOutlined, EyeOutlined, EditOutlined, UploadOutlined, UserOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useAuth } from '@/lib/auth-context';
+import { useToast } from '@/lib/toast-context';
+import { apiRequest } from '@/lib/api';
 
 type Gender = 'male' | 'female' | 'child';
 type Status = 'Active' | 'Inactive';
@@ -88,15 +90,175 @@ interface Member {
 
 export default function MembersPage() {
   const { hasPermission, isSuperAdmin } = useAuth();
+  const { showToast } = useToast();
   const [showModal, setShowModal] = useState(false);
   const [showMemberDetail, setShowMemberDetail] = useState(false);
   const [selectedMember, setSelectedMember] = useState<Member | null>(null);
+  const [editingMember, setEditingMember] = useState<Member | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [currentStep, setCurrentStep] = useState(0);
   const [form] = Form.useForm();
   const [profileImagePreview, setProfileImagePreview] = useState<string | null>(null);
   const [fileList, setFileList] = useState<UploadFile[]>([]);
+  const [submitting, setSubmitting] = useState(false);
   const drawerBodyRef = useRef<HTMLDivElement>(null);
+  
+  // API integration for members
+  const [members, setMembers] = useState<Member[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Backend member interface to match API response
+  interface BackendMember {
+    id: number;
+    parish_number: string;
+    surname: string;
+    other_names: string;
+    gender: 'male' | 'female';
+    date_of_birth: string;
+    marital_status: string;
+    nationality: string;
+    hometown: string;
+    region: string;
+    residential_address: string;
+    digital_address: string;
+    mobile_number: string;
+    whatsapp_number: string;
+    email_address: string;
+    membership_status: string;
+    date_joined_society: string;
+    transferred_from_another_society: boolean;
+    baptised: boolean;
+    confirmed: boolean;
+    occupation: string;
+    place_of_work_or_school: string;
+    skills_or_talent: string;
+    organisation_and_details: Record<string, any>;
+    next_of_kin: {
+      name: string;
+      relationship: string;
+      mobile_number: string;
+      address: string;
+    };
+  }
+
+  // Convert backend member to frontend member format
+  const mapBackendMember = (backendMember: BackendMember): Member => {
+    const fullName = [backendMember.surname, backendMember.other_names]
+      .filter(Boolean)
+      .join(' ');
+
+    // Calculate age from date of birth
+    let age: number | undefined;
+    if (backendMember.date_of_birth) {
+      const birthDate = new Date(backendMember.date_of_birth);
+      const today = new Date();
+      age = today.getFullYear() - birthDate.getFullYear();
+      const monthDiff = today.getMonth() - birthDate.getMonth();
+      if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+        age--;
+      }
+    }
+
+    // Map membership status
+    const membershipStatusMap: Record<string, string> = {
+      'full_member': 'Full Member',
+      'catechumen': 'Catechumen',
+      'adherent': 'Adherent',
+      'child': 'Child'
+    };
+
+    // Determine status based on membership
+    const membershipStatus = membershipStatusMap[backendMember.membership_status] || 'Full Member';
+    const status: Status = membershipStatus === 'Full Member' || membershipStatus === 'Adherent' ? 'Active' : 'Inactive';
+
+    // Map gender to include child option
+    let gender: Gender;
+    if (backendMember.membership_status === 'child') {
+      gender = 'child';
+    } else {
+      gender = backendMember.gender as Gender;
+    }
+
+    return {
+      id: backendMember.id,
+      churchNumber: backendMember.parish_number,
+      name: fullName,
+      email: backendMember.email_address || '',
+      phone: backendMember.mobile_number || '',
+      department: 'General', // Default department since backend doesn't have this
+      status: status,
+      joinDate: backendMember.date_joined_society || new Date().toISOString().split('T')[0],
+      gender: gender,
+      age: age,
+      // Map all backend fields
+      surname: backendMember.surname,
+      otherNames: backendMember.other_names,
+      dateOfBirth: backendMember.date_of_birth,
+      maritalStatus: backendMember.marital_status,
+      nationality: backendMember.nationality,
+      hometown: backendMember.hometown,
+      region: backendMember.region,
+      residentialAddress: backendMember.residential_address,
+      digitalAddress: backendMember.digital_address,
+      mobileNumber: backendMember.mobile_number,
+      whatsappNumber: backendMember.whatsapp_number,
+      membershipStatus: membershipStatus,
+      dateJoinedSociety: backendMember.date_joined_society,
+      transferredFromAnotherSociety: backendMember.transferred_from_another_society,
+      baptised: backendMember.baptised,
+      confirmed: backendMember.confirmed,
+      occupation: backendMember.occupation,
+      placeOfWork: backendMember.place_of_work_or_school,
+      skillsTalents: backendMember.skills_or_talent,
+      organisations: [], // TODO: Parse organisation_and_details if needed
+      nextOfKinName: backendMember.next_of_kin?.name,
+      nextOfKinRelationship: backendMember.next_of_kin?.relationship,
+      nextOfKinPhone: backendMember.next_of_kin?.mobile_number,
+      nextOfKinAddress: backendMember.next_of_kin?.address,
+    };
+  };
+
+  // Fetch members from API
+  const fetchMembers = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const token = localStorage.getItem('auth_token');
+      if (!token) {
+        setError('No authentication token found');
+        return;
+      }
+
+      const response = await apiRequest<{ members: BackendMember[] }>('members', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (response.data && response.data.members) {
+        const mappedMembers = response.data.members.map(mapBackendMember);
+        setMembers(mappedMembers);
+      } else if (response.error) {
+        console.error('Failed to fetch members:', response.error);
+        setError(response.error.message || 'Failed to fetch members');
+      } else {
+        console.warn('Unexpected API response format:', response);
+        setError('Unexpected response format from server');
+      }
+    } catch (error) {
+      console.error('Error fetching members:', error);
+      setError('Network error occurred while fetching members');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fetch members on component mount
+  useEffect(() => {
+    fetchMembers();
+  }, []);
 
   // Scroll drawer content to top when step changes so the current step is visible
   useEffect(() => {
@@ -123,247 +285,65 @@ export default function MembersPage() {
     return `CH-${String(nextNumber).padStart(4, '0')}`;
   };
 
-  const [members, setMembers] = useState<Member[]>([
+  // Function to open edit member modal
+  const openEditMember = (member: Member) => {
+    setEditingMember(member);
+    setShowModal(true);
+    setCurrentStep(0);
+    
+    // Populate form with existing member data
+    form.setFieldsValue({
+      profileImage: member.profileImage,
+      surname: member.surname,
+      otherNames: member.otherNames,
+      gender: member.gender,
+      dateOfBirth: member.dateOfBirth ? dayjs(member.dateOfBirth) : undefined,
+      age: member.age,
+      maritalStatus: member.maritalStatus,
+      nationality: member.nationality,
+      hometown: member.hometown,
+      region: member.region,
+      organisations: member.organisations || [],
+      otherOrganisation: member.otherOrganisation,
+      occupation: member.occupation,
+      placeOfWork: member.placeOfWork,
+      skillsTalents: member.skillsTalents,
+      nextOfKinName: member.nextOfKinName,
+      nextOfKinRelationship: member.nextOfKinRelationship,
+      nextOfKinPhone: member.nextOfKinPhone,
+      nextOfKinAddress: member.nextOfKinAddress,
+      residentialAddress: member.residentialAddress,
+      digitalAddress: member.digitalAddress,
+      mobileNumber: member.mobileNumber,
+      whatsappNumber: member.whatsappNumber,
+      email: member.email,
+      membershipStatus: member.membershipStatus,
+      dateJoinedSociety: member.dateJoinedSociety ? dayjs(member.dateJoinedSociety) : undefined,
+      transferredFromAnotherSociety: member.transferredFromAnotherSociety,
+      formerSocietyName: member.formerSocietyName,
+      baptised: member.baptised,
+      baptismDate: member.baptismDate ? dayjs(member.baptismDate) : undefined,
+      baptismPlace: member.baptismPlace,
+      confirmed: member.confirmed,
+      confirmationDate: member.confirmationDate ? dayjs(member.confirmationDate) : undefined,
+      confirmationPlace: member.confirmationPlace,
+    });
 
-    // Initial sample members with Ghanaian data
-    {
-      id: 1,
-      churchNumber: 'CH-0001',
-      name: 'Kwame Asante',
-      surname: 'Asante',
-      otherNames: 'Kwame',
-      email: 'kwame.asante@gmail.com',
-      phone: '+233 24 123 4567',
-      mobileNumber: '0241234567',
-      whatsappNumber: '0241234567',
-      department: 'Choir',
-      status: 'Active',
-      joinDate: '2023-01-15',
-      gender: 'male',
-      age: 35,
-      dateOfBirth: '1989-05-20',
-      maritalStatus: 'married',
-      nationality: 'Ghanaian',
-      hometown: 'Kumasi',
-      region: 'Ashanti',
-      residentialAddress: 'House No. 45, Adenta Housing Estate, Accra',
-      digitalAddress: 'GA-123-4567',
-      membershipStatus: 'Full Member',
-      dateJoinedSociety: '2023-01-15',
-      transferredFromAnotherSociety: false,
-      baptised: true,
-      baptismDate: '2005-06-15',
-      baptismPlace: 'St Joseph Catholic Church, Adenta',
-      confirmed: true,
-      confirmationDate: '2007-08-20',
-      confirmationPlace: 'St Joseph Catholic Church, Adenta',
-      organisations: ['Choir'],
-      occupation: 'Teacher',
-      placeOfWork: 'Adenta  Basic School',
-      skillsTalents: 'Singing, Teaching, Piano',
-      nextOfKinName: 'Ama Asante',
-      nextOfKinRelationship: 'Wife',
-      nextOfKinPhone: '0247654321',
-      nextOfKinAddress: 'House No. 45, Adenta Housing Estate, Accra',
-    },
-    {
-      id: 2,
-      churchNumber: 'CH-0002',
-      name: 'Ama Mensah',
-      surname: 'Mensah',
-      otherNames: 'Ama',
-      email: 'ama.mensah@yahoo.com',
-      phone: '+233 20 234 5678',
-      mobileNumber: '0202345678',
-      whatsappNumber: '0202345678',
-      department: 'Ushers',
-      status: 'Active',
-      joinDate: '2022-08-20',
-      gender: 'female',
-      age: 28,
-      dateOfBirth: '1996-03-12',
-      maritalStatus: 'single',
-      nationality: 'Ghanaian',
-      hometown: 'Cape Coast',
-      region: 'Central',
-      residentialAddress: 'Block 12, Tema Community 5',
-      digitalAddress: 'GA-234-5678',
-      membershipStatus: 'Full Member',
-      dateJoinedSociety: '2022-08-20',
-      transferredFromAnotherSociety: false,
-      baptised: true,
-      baptismDate: '2010-04-10',
-      baptismPlace: 'St Joseph Catholic Church, Tema',
-      confirmed: true,
-      confirmationDate: '2012-05-15',
-      confirmationPlace: 'St Joseph Catholic Church, Tema',
-      organisations: ['Ushers', "Women's Fellowship"],
-      occupation: 'Nurse',
-      placeOfWork: 'Tema General Hospital',
-      skillsTalents: 'Nursing, First Aid, Counseling',
-      nextOfKinName: 'Kofi Mensah',
-      nextOfKinRelationship: 'Brother',
-      nextOfKinPhone: '0249876543',
-      nextOfKinAddress: 'Block 12, Tema Community 5',
-    },
-    {
-      id: 3,
-      churchNumber: 'CH-0003',
-      name: 'Kofi Osei',
-      surname: 'Osei',
-      otherNames: 'Kofi',
-      email: 'kofi.osei@hotmail.com',
-      phone: '+233 26 345 6789',
-      mobileNumber: '0263456789',
-      whatsappNumber: '0263456789',
-      department: 'Youth',
-      status: 'Inactive',
-      joinDate: '2021-03-10',
-      gender: 'male',
-      age: 42,
-      dateOfBirth: '1982-11-08',
-      maritalStatus: 'married',
-      nationality: 'Ghanaian',
-      hometown: 'Sunyani',
-      region: 'Bono',
-      residentialAddress: 'Plot 8, East Legon, Accra',
-      digitalAddress: 'GA-345-6789',
-      membershipStatus: 'Adherent',
-      dateJoinedSociety: '2021-03-10',
-      transferredFromAnotherSociety: true,
-      formerSocietyName: 'Sacred Heart Catholic Church, Sunyani',
-      baptised: true,
-      baptismDate: '1998-07-22',
-      baptismPlace: 'Sacred Heart Catholic Church, Sunyani',
-      confirmed: true,
-      confirmationDate: '2000-09-10',
-      confirmationPlace: 'Sacred Heart Catholic Church, Sunyani',
-      organisations: ['Youth Fellowship'],
-      occupation: 'Engineer',
-      placeOfWork: 'Ghana Water Company Limited',
-      skillsTalents: 'Engineering, IT, Leadership',
-      nextOfKinName: 'Akosua Osei',
-      nextOfKinRelationship: 'Wife',
-      nextOfKinPhone: '0241112222',
-      nextOfKinAddress: 'Plot 8, East Legon, Accra',
-    },
-    {
-      id: 4,
-      churchNumber: 'CH-0004',
-      name: 'Akosua Adjei',
-      surname: 'Adjei',
-      otherNames: 'Akosua',
-      email: 'akosua.adjei@gmail.com',
-      phone: '+233 55 456 7890',
-      mobileNumber: '0554567890',
-      whatsappNumber: '0554567890',
-      department: "Women's Fellowship",
-      status: 'Active',
-      joinDate: '2023-06-05',
-      gender: 'female',
-      age: 31,
-      dateOfBirth: '1993-09-25',
-      maritalStatus: 'married',
-      nationality: 'Ghanaian',
-      hometown: 'Tamale',
-      region: 'Northern',
-      residentialAddress: 'House 23, Spintex Road, Accra',
-      digitalAddress: 'GA-456-7890',
-      membershipStatus: 'Full Member',
-      dateJoinedSociety: '2023-06-05',
-      transferredFromAnotherSociety: false,
-      baptised: true,
-      baptismDate: '2008-12-05',
-      baptismPlace: 'St Joseph Catholic Church, Tamale',
-      confirmed: true,
-      confirmationDate: '2010-03-18',
-      confirmationPlace: 'St Joseph Catholic Church, Tamale',
-      organisations: ["Women's Fellowship"],
-      occupation: 'Accountant',
-      placeOfWork: 'Ernst & Young Ghana',
-      skillsTalents: 'Accounting, Financial Planning, Event Planning',
-      nextOfKinName: 'Yaw Adjei',
-      nextOfKinRelationship: 'Husband',
-      nextOfKinPhone: '0243334444',
-      nextOfKinAddress: 'House 23, Spintex Road, Accra',
-    },
-    {
-      id: 5,
-      churchNumber: 'CH-0005',
-      name: 'Efua Boateng',
-      surname: 'Boateng',
-      otherNames: 'Efua',
-      email: 'efua.boateng@yahoo.com',
-      phone: '+233 50 567 8901',
-      mobileNumber: '0505678901',
-      whatsappNumber: '0505678901',
-      department: 'Children',
-      status: 'Active',
-      joinDate: '2024-01-10',
-      gender: 'child',
-      age: 8,
-      dateOfBirth: '2016-07-14',
-      maritalStatus: 'single',
-      nationality: 'Ghanaian',
-      hometown: 'Koforidua',
-      region: 'Eastern',
-      residentialAddress: 'Flat 5, Dansoman Estate, Accra',
-      digitalAddress: 'GA-567-8901',
-      membershipStatus: 'Child',
-      dateJoinedSociety: '2024-01-10',
-      transferredFromAnotherSociety: false,
-      baptised: false,
-      confirmed: false,
-      organisations: ['Children'],
-      occupation: 'Student',
-      placeOfWork: 'St Joseph Catholic School, Dansoman',
-      skillsTalents: 'Singing, Dancing, Drawing',
-      nextOfKinName: 'Kwame Boateng',
-      nextOfKinRelationship: 'Father',
-      nextOfKinPhone: '0245556666',
-      nextOfKinAddress: 'Flat 5, Dansoman Estate, Accra',
-    },
-    {
-      id: 6,
-      churchNumber: 'CH-0006',
-      name: 'Yaw Appiah',
-      surname: 'Appiah',
-      otherNames: 'Yaw',
-      email: 'yaw.appiah@gmail.com',
-      phone: '+233 27 678 9012',
-      mobileNumber: '0276789012',
-      whatsappNumber: '0276789012',
-      department: 'Men\'s Fellowship',
-      status: 'Active',
-      joinDate: '2023-03-15',
-      gender: 'male',
-      age: 45,
-      dateOfBirth: '1979-02-28',
-      maritalStatus: 'married',
-      nationality: 'Ghanaian',
-      hometown: 'Takoradi',
-      region: 'Western',
-      residentialAddress: 'No. 15, Airport Residential Area, Accra',
-      digitalAddress: 'GA-678-9012',
-      membershipStatus: 'Full Member',
-      dateJoinedSociety: '2023-03-15',
-      transferredFromAnotherSociety: false,
-      baptised: true,
-      baptismDate: '1992-10-12',
-      baptismPlace: 'St Joseph Catholic Church, Takoradi',
-      confirmed: true,
-      confirmationDate: '1994-11-20',
-      confirmationPlace: 'St Joseph Catholic Church, Takoradi',
-      organisations: ["Men's Fellowship"],
-      occupation: 'Businessman',
-      placeOfWork: 'Appiah Trading Company',
-      skillsTalents: 'Business Management, Public Speaking, Mentoring',
-      nextOfKinName: 'Abena Appiah',
-      nextOfKinRelationship: 'Wife',
-      nextOfKinPhone: '0247778888',
-      nextOfKinAddress: 'No. 15, Airport Residential Area, Accra',
-    },
-  ]);
+    // Set profile image preview if exists
+    if (member.profileImage) {
+      setProfileImagePreview(member.profileImage);
+    }
+  };
+
+  // Function to open add member modal
+  const openAddMember = () => {
+    setEditingMember(null);
+    setShowModal(true);
+    setCurrentStep(0);
+    setProfileImagePreview(null);
+    setFileList([]);
+    form.resetFields();
+  };
 
   const filteredMembers = members.filter((member) => {
     const searchLower = searchTerm.toLowerCase();
@@ -378,11 +358,11 @@ export default function MembersPage() {
   });
 
   // Calculate stats from members data
-  const total = members.length;
-  const active = members.filter(m => m.status === 'Active').length;
-  const children = members.filter(m => m.gender === 'child').length;
-  const men = members.filter(m => m.gender === 'male').length;
-  const women = members.filter(m => m.gender === 'female').length;
+  const total = loading ? 0 : members.length;
+  const active = loading ? 0 : members.filter(m => m.status === 'Active').length;
+  const children = loading ? 0 : members.filter(m => m.gender === 'child' || m.membershipStatus === 'Child').length;
+  const men = loading ? 0 : members.filter(m => m.gender === 'male').length;
+  const women = loading ? 0 : members.filter(m => m.gender === 'female').length;
 
   // Pattern SVG definitions (matching dashboard style)
   const patternStyles = [
@@ -409,11 +389,11 @@ export default function MembersPage() {
   ];
 
   const stats = [
-    { label: 'Total Members', value: total.toLocaleString(), icon: HiOutlineUsers },
-    { label: 'Active Members', value: active.toLocaleString(), icon: HiTrendingUp },
-    { label: 'Children', value: children.toLocaleString(), icon: HiUserAdd },
-    { label: 'Men', value: men.toLocaleString(), icon: HiOutlineUsers },
-    { label: 'Women', value: women.toLocaleString(), icon: HiOutlineUsers },
+    { label: 'Total Members', value: loading ? '...' : total.toLocaleString(), icon: HiOutlineUsers },
+    { label: 'Active Members', value: loading ? '...' : active.toLocaleString(), icon: HiTrendingUp },
+    { label: 'Children', value: loading ? '...' : children.toLocaleString(), icon: HiUserAdd },
+    { label: 'Men', value: loading ? '...' : men.toLocaleString(), icon: HiOutlineUsers },
+    { label: 'Women', value: loading ? '...' : women.toLocaleString(), icon: HiOutlineUsers },
   ];
 
   // Define table columns
@@ -508,8 +488,7 @@ export default function MembersPage() {
             icon={<EditOutlined />} 
             onClick={(e) => {
               e.stopPropagation();
-              // TODO: Handle edit functionality
-              console.log('Edit member:', record);
+              openEditMember(record);
             }}
           />
         </Space>
@@ -528,10 +507,20 @@ export default function MembersPage() {
           <p className="text-sm sm:text-base text-gray-600 mt-1">Manage parish members and their information</p>
         </div>
         {(hasPermission('members') || isSuperAdmin) && (
-          <Button onClick={() => setShowModal(true)} className="shadow-lg w-full sm:w-auto">
-            <HiUserAdd className="h-4 w-4 mr-2" />
-            Register New Member
-          </Button>
+          <div className="flex gap-2">
+            <Button 
+              onClick={fetchMembers} 
+              variant="outline" 
+              disabled={loading}
+              className="shadow-lg"
+            >
+              {loading ? 'Loading...' : 'Refresh'}
+            </Button>
+            <Button onClick={openAddMember} className="shadow-lg">
+              <HiUserAdd className="h-4 w-4 mr-2" />
+              Register New Member
+            </Button>
+          </div>
         )}
       </div>
 
@@ -624,27 +613,44 @@ export default function MembersPage() {
           </div>
         </CardHeader>
         <CardContent className="relative z-10 overflow-x-auto">
-          <Table
-            columns={columns}
-            dataSource={filteredMembers}
-            rowKey="id"
-            pagination={{
-              pageSize: 10,
-              showSizeChanger: true,
-              showTotal: (total) => `Total ${total} members`,
-              responsive: true,
-            }}
-            scroll={{ x: 'max-content' }}
-            onRow={(record) => ({
-              onClick: () => {
-                setSelectedMember(record);
-                setShowMemberDetail(true);
-              },
-              style: { cursor: 'pointer' },
-              className: 'hover:bg-gray-50 transition-colors',
-            })}
-            rowClassName={() => 'hover:bg-gray-50'}
-          />
+          {error ? (
+            <div className="text-center py-8">
+              <div className="text-red-600 mb-2">
+                <HiOutlineUsers className="h-12 w-12 mx-auto mb-2 opacity-50" />
+              </div>
+              <h3 className="text-lg font-medium text-gray-900 mb-1">Failed to load members</h3>
+              <p className="text-gray-500 mb-4">{error}</p>
+              <Button onClick={fetchMembers} variant="outline">
+                Try Again
+              </Button>
+            </div>
+          ) : (
+            <Table
+              columns={columns}
+              dataSource={filteredMembers}
+              rowKey="id"
+              loading={loading}
+              pagination={{
+                pageSize: 10,
+                showSizeChanger: true,
+                showTotal: (total) => `Total ${total} members`,
+                responsive: true,
+              }}
+              scroll={{ x: 'max-content' }}
+              onRow={(record) => ({
+                onClick: () => {
+                  setSelectedMember(record);
+                  setShowMemberDetail(true);
+                },
+                style: { cursor: 'pointer' },
+                className: 'hover:bg-gray-50 transition-colors',
+              })}
+              rowClassName={() => 'hover:bg-gray-50'}
+              locale={{
+                emptyText: loading ? 'Loading members...' : 'No members found'
+              }}
+            />
+          )}
         </CardContent>
       </Card>
 
@@ -653,7 +659,9 @@ export default function MembersPage() {
         title={
           <div className="flex items-center gap-2">
             <HiUserAdd className="h-5 w-5 text-green-600" />
-            <span className="text-lg sm:text-xl font-bold text-gray-900">Register New Member</span>
+            <span className="text-lg sm:text-xl font-bold text-gray-900">
+              {editingMember ? 'Edit Member' : 'Register New Member'}
+            </span>
           </div>
         }
         placement="right"
@@ -663,6 +671,8 @@ export default function MembersPage() {
           setCurrentStep(0);
           setProfileImagePreview(null);
           setFileList([]);
+          setSubmitting(false);
+          setEditingMember(null);
           form.resetFields();
         }}
         open={showModal}
@@ -688,108 +698,115 @@ export default function MembersPage() {
           <Form
             form={form}
             layout="vertical"
-            onFinish={(values) => {
-            // Helper function to format date from dayjs or string
-            const formatDate = (date: any): string | undefined => {
-              if (!date) return undefined;
-              if (dayjs.isDayjs(date)) return date.format('YYYY-MM-DD');
-              if (typeof date === 'string') return date;
-              return undefined;
-            };
+            preserve={true}
+            onFinish={async (values) => {
+              try {
+                setSubmitting(true);
+                
+                // Helper function to format date from dayjs or string
+                const formatDate = (date: any): string | undefined => {
+                  if (!date) return undefined;
+                  if (dayjs.isDayjs(date)) return date.format('YYYY-MM-DD');
+                  if (typeof date === 'string') return date;
+                  return undefined;
+                };
 
-            // Calculate age from date of birth if provided
-            let age: number | undefined;
-            if (values.dateOfBirth) {
-              const birthDate = dayjs.isDayjs(values.dateOfBirth) 
-                ? values.dateOfBirth.toDate() 
-                : new Date(values.dateOfBirth);
-              const today = new Date();
-              age = today.getFullYear() - birthDate.getFullYear();
-              const monthDiff = today.getMonth() - birthDate.getMonth();
-              if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
-                age--;
+                // Prepare the API payload according to the backend structure
+                const memberPayload = {
+                  member: {
+                    surname: values.surname || '',
+                    other_names: values.otherNames || '',
+                    gender: values.gender || 'male',
+                    date_of_birth: formatDate(values.dateOfBirth) || '',
+                    marital_status: values.maritalStatus || 'single',
+                    nationality: values.nationality || '',
+                    hometown: values.hometown || '',
+                    region: values.region || '',
+                    residential_address: values.residentialAddress || '',
+                    digital_address: values.digitalAddress || '',
+                    mobile_number: values.mobileNumber || '',
+                    whatsapp_number: values.whatsappNumber || values.mobileNumber || '',
+                    email_address: values.email || '',
+                    membership_status: values.membershipStatus?.toLowerCase().replace(' ', '_') || 'full_member',
+                    date_joined_society: formatDate(values.dateJoinedSociety) || '',
+                    transferred_from_another_society: values.transferredFromAnotherSociety || false,
+                    baptised: values.baptised || false,
+                    confirmed: values.confirmed || false,
+                    occupation: values.occupation || '',
+                    place_of_work_or_school: values.placeOfWork || '',
+                    skills_or_talent: values.skillsTalents || '',
+                    next_of_kin_name: values.nextOfKinName || '',
+                    next_of_kin_relationship: values.nextOfKinRelationship || '',
+                    next_of_kin_mobile_number: values.nextOfKinPhone || '',
+                    next_of_kin_address: values.nextOfKinAddress || '',
+                  }
+                };
+
+                // Get authentication token
+                const token = localStorage.getItem('auth_token');
+                if (!token) {
+                  throw new Error('No authentication token found');
+                }
+
+                let response;
+                if (editingMember) {
+                  // Update existing member
+                  response = await apiRequest(`members/${editingMember.id}`, {
+                    method: 'PUT',
+                    headers: {
+                      'Authorization': `Bearer ${token}`,
+                      'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(memberPayload),
+                  });
+                } else {
+                  // Create new member
+                  response = await apiRequest('members', {
+                    method: 'POST',
+                    headers: {
+                      'Authorization': `Bearer ${token}`,
+                      'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(memberPayload),
+                  });
+                }
+
+                if (response.error) {
+                  throw new Error(response.error.message || `Failed to ${editingMember ? 'update' : 'register'} member`);
+                }
+
+                // Success - refresh the members list
+                await fetchMembers();
+                
+                // Close modal and reset form
+                setShowModal(false);
+                setCurrentStep(0);
+                setProfileImagePreview(null);
+                setFileList([]);
+                setSubmitting(false);
+                setEditingMember(null);
+                form.resetFields();
+
+                // Show success message
+                showToast(
+                  editingMember ? 'Member updated successfully!' : 'Member registered successfully!', 
+                  'success'
+                );
+
+              } catch (error) {
+                console.error(`Error ${editingMember ? 'updating' : 'registering'} member:`, error);
+                // Show error message
+                showToast(
+                  error instanceof Error ? error.message : `Failed to ${editingMember ? 'update' : 'register'} member`,
+                  'error'
+                );
+              } finally {
+                setSubmitting(false);
               }
-            }
-
-            // Format name from surname and other names
-            const fullName = [values.surname, values.otherNames]
-              .filter(Boolean)
-              .join(' ');
-
-            // Get primary department from organisations (use first one or combine)
-            const organisations = values.organisations || [];
-            const primaryDepartment = organisations.length > 0 
-              ? organisations[0] 
-              : 'None';
-
-            // Determine status from membership status
-            const membershipStatus = values.membershipStatus || 'Full Member';
-            const memberStatus: Status = membershipStatus === 'Full Member' || membershipStatus === 'Adherent' 
-              ? 'Active' 
-              : 'Inactive';
-
-            // Generate unique church number for the new member
-            const churchNumber = generateChurchNumber(members);
-
-            // Create new member with all form data
-            const newMember: Member = {
-              id: members.length + 1,
-              churchNumber: churchNumber,
-              name: fullName,
-              email: values.email || '',
-              phone: values.mobileNumber || '',
-              department: primaryDepartment,
-              status: memberStatus,
-              joinDate: formatDate(values.dateJoinedSociety) || new Date().toISOString().split('T')[0],
-              gender: values.gender as Gender,
-              age: values.age || age,
-              // New form fields
-              surname: values.surname,
-              otherNames: values.otherNames,
-              dateOfBirth: formatDate(values.dateOfBirth),
-              maritalStatus: values.maritalStatus,
-              nationality: values.nationality,
-              hometown: values.hometown,
-              region: values.region,
-              residentialAddress: values.residentialAddress,
-              digitalAddress: values.digitalAddress,
-              mobileNumber: values.mobileNumber,
-              whatsappNumber: values.whatsappNumber,
-              membershipStatus: values.membershipStatus,
-              dateJoinedSociety: formatDate(values.dateJoinedSociety),
-              transferredFromAnotherSociety: values.transferredFromAnotherSociety,
-              formerSocietyName: values.formerSocietyName,
-              baptised: values.baptised,
-              baptismDate: formatDate(values.baptismDate),
-              baptismPlace: values.baptismPlace,
-              confirmed: values.confirmed,
-              confirmationDate: formatDate(values.confirmationDate),
-              confirmationPlace: values.confirmationPlace,
-              organisations: organisations,
-              otherOrganisation: values.otherOrganisation,
-              occupation: values.occupation,
-              placeOfWork: values.placeOfWork,
-              skillsTalents: values.skillsTalents,
-              nextOfKinName: values.nextOfKinName,
-              nextOfKinRelationship: values.nextOfKinRelationship,
-              nextOfKinPhone: values.nextOfKinPhone,
-              nextOfKinAddress: values.nextOfKinAddress,
-              profileImage: values.profileImage || undefined,
-            };
-
-            // Add new member to the list
-            setMembers([...members, newMember]);
-            
-              setShowModal(false);
-              setCurrentStep(0);
-            setProfileImagePreview(null);
-            setFileList([]);
-              form.resetFields();
             }}
           >
             {/* Step 1: Personal Information */}
-            {currentStep === 0 && (
-              <div className="space-y-4">
+            <div style={{ display: currentStep === 0 ? 'block' : 'none' }} className="space-y-4">
                 {/* Profile Image Upload */}
                     <Form.Item
                   label="Profile Photo"
@@ -944,11 +961,8 @@ export default function MembersPage() {
                   </Col>
                 </Row>
               </div>
-            )}
-
             {/* Step 3: Contact & Membership */}
-            {currentStep === 2 && (
-              <div className="space-y-6">
+            <div style={{ display: currentStep === 2 ? 'block' : 'none' }} className="space-y-6">
                 <div>
                   <h4 className="text-base font-semibold text-gray-900 mb-4">CONTACT DETAILS</h4>
               <div className="space-y-4">
@@ -1137,11 +1151,8 @@ export default function MembersPage() {
                   </div>
                 </div>
               </div>
-            )}
-
             {/* Step 2: Organisation & Details */}
-            {currentStep === 1 && (
-              <div key="step-2" className="space-y-6">
+            <div style={{ display: currentStep === 1 ? 'block' : 'none' }} key="step-2" className="space-y-6">
                 <div>
                   <h4 className="text-base font-semibold text-gray-900 mb-4">SOCIETY & ORGANISATION MEMBERSHIP</h4>
                       <Form.Item
@@ -1245,12 +1256,11 @@ export default function MembersPage() {
                   </div>
                 </div>
               </div>
-            )}
-
             <div className="flex gap-3 pt-6 mt-6 border-t border-gray-200">
               <Button
                 type="button"
                 variant="outline"
+                disabled={submitting}
                 onClick={() => {
                   if (currentStep > 0) {
                     setCurrentStep(currentStep - 1);
@@ -1259,6 +1269,8 @@ export default function MembersPage() {
                     setCurrentStep(0);
                     setProfileImagePreview(null);
                     setFileList([]);
+                    setSubmitting(false);
+                    setEditingMember(null);
                     form.resetFields();
                   }
                 }}
@@ -1270,8 +1282,19 @@ export default function MembersPage() {
   <AntButton
     type="primary"
     htmlType="button"  // This prevents form submission
-    onClick={() => {
-      setCurrentStep(currentStep + 1);
+    disabled={submitting}
+    onClick={async () => {
+      try {
+        // Validate current step fields before proceeding
+        if (currentStep === 0) {
+          await form.validateFields(['surname', 'otherNames', 'gender', 'dateOfBirth']);
+        } else if (currentStep === 1) {
+          // No required fields in step 2, so just proceed
+        }
+        setCurrentStep(currentStep + 1);
+      } catch (error) {
+        // Don't proceed if validation fails
+      }
     }}
     className="flex-1"
     size="large"
@@ -1284,8 +1307,13 @@ export default function MembersPage() {
     htmlType="submit"  // Only the final button should submit
     className="flex-1"
     size="large"
+    loading={submitting}
+    disabled={submitting}
   >
-    Register Member
+    {submitting 
+      ? (editingMember ? 'Updating...' : 'Registering...') 
+      : (editingMember ? 'Update Member' : 'Register Member')
+    }
   </AntButton>
 )}
             </div>
@@ -1540,8 +1568,7 @@ export default function MembersPage() {
                 </Button>
                 <Button
                   onClick={() => {
-                    // TODO: Handle edit functionality
-                    console.log('Edit member:', selectedMember);
+                    openEditMember(selectedMember);
                     setShowMemberDetail(false);
                     setSelectedMember(null);
                   }}
