@@ -3,10 +3,14 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
-import { HiOutlineLockClosed, HiOutlineMail } from 'react-icons/hi';
+import {
+  HiOutlineLockClosed,
+  HiOutlineMail,
+  HiOutlineEye,
+  HiOutlineEyeOff,
+} from 'react-icons/hi';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent } from '@/components/ui/card';
 import { useToast } from '@/lib/toast-context';
 
 export default function SignInPage() {
@@ -37,82 +41,95 @@ export default function SignInPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4 sm:p-6">
-      <div className="w-full max-w-md">
-        <div className="text-center mb-6 sm:mb-8">
-          <div className="inline-flex items-center justify-center w-12 h-12 sm:w-16 sm:h-16 mb-3 sm:mb-4">
-            <img
-              src="/images/logos/logo.png"
-              alt="St Joseph Catholic Church"
-              className="w-12 h-12 sm:w-16 sm:h-16 object-contain"
-            />
-          </div>
-          <p className="text-sm sm:text-base text-gray-600">Sign in to continue</p>
-        </div>
+    <div
+      className="relative min-h-screen bg-cover bg-center bg-no-repeat p-4 sm:p-6 lg:p-10"
+      style={{ backgroundImage: "url('/images/background.png')" }}
+    >
+      <div className="pointer-events-none absolute inset-0 bg-black/10" />
+      <div className="mx-auto flex min-h-[calc(100vh-2rem)] w-full max-w-6xl items-center justify-end">
+        <section className="w-full max-w-[440px] rounded-3xl border border-white bg-white p-7 shadow-2xl sm:p-8">
+          <div className="w-full">
+            <div className="mb-7 flex items-center gap-3">
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white shadow-md">
+                <img
+                  src="/images/logos/logo.png"
+                  alt="St Joseph Catholic Church"
+                  className="h-9 w-9 object-contain"
+                />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-slate-800">St Joseph Catholic Church</p>
+                <p className="text-xs text-slate-500">Church Administration System</p>
+              </div>
+            </div>
 
-        <Card className="shadow-lg border-gray-200">
-          <CardContent className="p-5 sm:p-6 md:p-8">
+            <div className="mb-7">
+              <h1 className="text-3xl font-bold text-slate-900">Login</h1>
+              <p className="mt-1.5 text-sm text-slate-600">
+                Sign in to continue to the dashboard.
+              </p>
+            </div>
+
             <form onSubmit={handleLoginSubmit} className="space-y-5">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Username
-                </label>
+                <label className="mb-2 block text-sm font-semibold text-slate-700">Email</label>
                 <div className="relative">
-                  <HiOutlineMail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                  <HiOutlineMail className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
                   <Input
                     type="text"
-                    placeholder="Enter your username"
+                    placeholder="Enter your email"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
                     required
-                    className="pl-10 h-11"
+                    className="h-12 rounded-xl border-slate-200 bg-white pl-10 text-[15px]"
                   />
                 </div>
               </div>
+
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Password
-                </label>
+                <label className="mb-2 block text-sm font-semibold text-slate-700">Password</label>
                 <div className="relative">
-                  <HiOutlineLockClosed className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                  <HiOutlineLockClosed className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
                   <Input
                     type={showPassword ? 'text' : 'password'}
                     placeholder="Enter your password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
-                    className="pl-10 pr-16 h-11"
+                    className="h-12 rounded-xl border-slate-200 bg-white pl-10 pr-12 text-[15px]"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-sm text-gray-500 hover:text-gray-700 font-medium"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
                   >
-                    {showPassword ? 'Hide' : 'Show'}
+                    {showPassword ? <HiOutlineEyeOff className="h-5 w-5" /> : <HiOutlineEye className="h-5 w-5" />}
                   </button>
                 </div>
               </div>
+
               <Button
                 type="submit"
-                className="w-full h-11 font-medium"
+                className="h-12 w-full rounded-xl bg-[#0f4a8a] text-base font-semibold shadow-lg shadow-[#0f4a8a]/25 hover:bg-[#0c3d72]"
                 disabled={loading}
               >
                 {loading ? (
                   <span className="flex items-center gap-2">
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
                     Signing in...
                   </span>
                 ) : (
-                  'Sign In'
+                  'Login'
                 )}
               </Button>
             </form>
-          </CardContent>
-        </Card>
 
-        <p className="text-center text-sm text-gray-500 mt-6">
-          © 2025 St Joseph Catholic Church. All rights reserved.
-        </p>
+            <p className="mt-6 text-center text-xs text-slate-500">
+              St. Joseph Catholic Church © 2026
+            </p>
+          </div>
+        </section>
       </div>
     </div>
   );

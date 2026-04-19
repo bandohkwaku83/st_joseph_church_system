@@ -37,7 +37,7 @@ const allNavigation: NavItem[] = [
   { name: 'Attendance', href: '/dashboard/attendance', icon: HiOutlineClipboardCheck, permission: 'attendance' },
   { name: 'Welfare/Dues', href: '/dashboard/welfare-dues', icon: HiReceiptRefund, permission: ['record_income', 'expenditure'] },
   { name: 'Generate Report', href: '/dashboard/generate-report', icon: HiClipboardList, permission: 'generate_report' },
-  { name: 'Tithes', href: '/dashboard/tithes', icon: HiReceiptRefund, permission: 'tithes' },
+  // { name: 'Tithes', href: '/dashboard/tithes', icon: HiReceiptRefund, permission: 'tithes' },
   { name: 'Communication', href: '/dashboard/communication', icon: HiOutlineChatAlt, permission: 'communication' },
   { name: 'Organizations', href: '/dashboard/departments', icon: HiOutlineOfficeBuilding, permission: 'departments' },
   { name: 'Assets/Equipment', href: '/dashboard/assets', icon: HiOutlineCube, permission: 'assets' },
@@ -97,17 +97,17 @@ export default function DashboardLayout({
             <div className="flex items-center gap-3 min-w-0">
               <img 
                 src="/images/logos/logo.png" 
-                alt="St Joseph Catholic Church" 
+                alt="St. Joseph Catholic Church" 
                 className="w-8 h-8 object-contain flex-shrink-0"
               />
-              <span className="text-sm font-semibold text-gray-900 truncate">St Joseph Catholic Church</span>
+              <span className="text-sm font-semibold text-gray-900 truncate">St. Joseph Catholic Church</span>
             </div>
           )}
           {!sidebarOpen && (
             <div className="w-8 h-8 flex items-center justify-center mx-auto">
               <img 
                 src="/images/logos/logo.png" 
-                alt="St Joseph Catholic Church" 
+                alt="St. Joseph Catholic Church" 
                 className="w-8 h-8 object-contain"
               />
             </div>
@@ -209,10 +209,10 @@ export default function DashboardLayout({
                   <div className="flex items-center gap-3">
                     <img 
                       src="/images/logos/logo.png" 
-                      alt="St Joseph Catholic Church" 
+                      alt="St. Joseph Catholic Church" 
                       className="w-8 h-8 object-contain"
                     />
-                    <span className="text-lg font-semibold text-gray-900">St Joseph Catholic Church</span>
+                    <span className="text-lg font-semibold text-gray-900">St. Joseph Catholic Church</span>
                   </div>
                   <button
                     onClick={() => setMobileMenuOpen(false)}

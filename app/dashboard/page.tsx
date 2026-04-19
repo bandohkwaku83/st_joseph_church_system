@@ -9,13 +9,10 @@ import {
   HiTrendingUp,
   HiTrendingDown,
   HiPlus,
-  HiMinus,
   HiOutlineUsers,
   HiOutlineClipboardCheck,
   HiOutlineOfficeBuilding,
   HiOutlineChatAlt,
-  HiUserGroup,
-  HiOutlineCalendar,
   HiReceiptRefund,
   HiOutlineChartBar,
 } from 'react-icons/hi';
@@ -24,159 +21,223 @@ import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
 
-interface IncomeEntry {
+/** Monthly welfare/dues payment (aligned with Welfare/Dues page) */
+interface DuesPayment {
   id: string;
   date: string;
-  category: string;
-  subcategory?: string;
+  memberName: string;
   amount: number;
-  paymentMethod: 'cash' | 'mobile-money' | 'bank-transfer';
-  notes?: string;
+  method: string;
 }
 
-interface ExpenditureEntry {
-  id: string;
-  date: string;
-  category: string;
-  subcategory?: string;
-  amount: number;
-  paymentMethod: 'cash' | 'mobile-money' | 'bank-transfer';
-  payee?: string;
-  notes?: string;
-}
+const WELFARE_ROSTER_MEMBER_COUNT = 6;
+const MONTHLY_DUES_GHC = 50;
+const EXPECTED_MONTHLY_DUES_TOTAL = WELFARE_ROSTER_MEMBER_COUNT * MONTHLY_DUES_GHC;
+
+const ADMIN_RECENT_ACTIVITY = [
+  {
+    id: 1,
+    type: 'member',
+    title: 'New member registered',
+    description: 'John Doe joined the parish',
+    time: '2 hours ago',
+    icon: HiOutlineUsers,
+    color: 'text-blue-600',
+    bgColor: 'bg-blue-100',
+  },
+  {
+    id: 2,
+    type: 'attendance',
+    title: 'Sunday Service recorded',
+    description: '102 attendees recorded',
+    time: '1 day ago',
+    icon: HiOutlineClipboardCheck,
+    color: 'text-green-600',
+    bgColor: 'bg-green-100',
+  },
+  {
+    id: 3,
+    type: 'organization',
+    title: 'New organization created',
+    description: 'Youth Fellowship added',
+    time: '2 days ago',
+    icon: HiOutlineOfficeBuilding,
+    color: 'text-purple-600',
+    bgColor: 'bg-purple-100',
+  },
+  {
+    id: 4,
+    type: 'communication',
+    title: 'Announcement sent',
+    description: 'Weekly bulletin sent to all members',
+    time: '3 days ago',
+    icon: HiOutlineChatAlt,
+    color: 'text-orange-600',
+    bgColor: 'bg-orange-100',
+  },
+];
 
 export default function Dashboard() {
   const { user, hasRole } = useAuth();
   const isAdmin = hasRole('church_admin');
   const isFinanceOfficer = hasRole('finance_officer');
 
-  // Financial data for finance officers
-  const [incomeEntries] = useState<IncomeEntry[]>([
-    { id: '1', date: '2024-03-15', category: 'Offerings', subcategory: 'Sunday Morning Service (1st)', amount: 205.00, paymentMethod: 'cash' },
-    { id: '2', date: '2024-03-10', category: 'Sunday Offerings', amount: 7360.00, paymentMethod: 'cash' },
-    { id: '3', date: '2024-03-12', category: 'Mid-week Services Offerings', amount: 1070.50, paymentMethod: 'mobile-money' },
-    { id: '4', date: '2024-03-10', category: 'Donations', subcategory: 'One-off donations', amount: 325.00, paymentMethod: 'bank-transfer' },
-    { id: '5', date: '2024-03-09', category: 'Donations', subcategory: 'Welfare donations', amount: 350.00, paymentMethod: 'mobile-money' },
-    { id: '6', date: '2024-03-11', category: 'Donations', subcategory: 'Project donations', amount: 454.00, paymentMethod: 'cash' },
-    { id: '7', date: '2024-03-13', category: 'Special Society Funds', subcategory: 'Welfare Fund', amount: 410.00, paymentMethod: 'cash' },
-    { id: '8', date: '2024-03-07', category: 'Special Society Funds', subcategory: 'Building Fund', amount: 148.20, paymentMethod: 'bank-transfer' },
-    { id: '9', date: '2024-03-06', category: 'Special Society Funds', subcategory: 'Mission / Evangelism Fund', amount: 212.50, paymentMethod: 'mobile-money' },
-    { id: '10', date: '2024-03-05', category: 'Harvest / Anniversary Offerings', amount: 1800.00, paymentMethod: 'cash' },
+  // Sample welfare/dues ledger (mirrors Welfare/Dues — GHC 50 target per member per month)
+  const [duesPayments] = useState<DuesPayment[]>([
+    { id: '1', date: '2026-04-14', memberName: 'Kwame Asante', amount: 50, method: 'Cash' },
+    { id: '2', date: '2026-04-13', memberName: 'Ama Mensah', amount: 50, method: 'Mobile Money' },
+    { id: '3', date: '2026-04-10', memberName: 'Akosua Adjei', amount: 25, method: 'Bank Transfer' },
+    { id: '4', date: '2026-04-08', memberName: 'Efua Boateng', amount: 50, method: 'Cash' },
+    { id: '5', date: '2026-03-28', memberName: 'Yaw Appiah', amount: 50, method: 'Mobile Money' },
+    { id: '6', date: '2026-03-25', memberName: 'Kwame Asante', amount: 50, method: 'Cash' },
+    { id: '7', date: '2026-03-24', memberName: 'Ama Mensah', amount: 50, method: 'Cash' },
+    { id: '8', date: '2026-03-22', memberName: 'Kofi Osei', amount: 50, method: 'Bank Transfer' },
+    { id: '9', date: '2026-03-20', memberName: 'Akosua Adjei', amount: 50, method: 'Cash' },
+    { id: '10', date: '2026-03-18', memberName: 'Efua Boateng', amount: 50, method: 'Cash' },
+    { id: '11', date: '2026-03-15', memberName: 'Yaw Appiah', amount: 40, method: 'Cash' },
   ]);
 
-  const [expenditureEntries] = useState<ExpenditureEntry[]>([
-    { id: '1', date: '2024-03-15', category: 'Operational Expenses', subcategory: 'Utilities (water, electricity)', amount: 450.00, paymentMethod: 'bank-transfer', payee: 'ECG' },
-    { id: '2', date: '2024-03-10', category: 'Operational Expenses', subcategory: 'Cleaning & maintenance', amount: 200.00, paymentMethod: 'cash' },
-    { id: '3', date: '2024-03-12', category: 'Payroll & Allowances', subcategory: 'Ministers\' stipends', amount: 1200.00, paymentMethod: 'bank-transfer', payee: 'Rev. John Doe' },
-    { id: '4', date: '2024-03-10', category: 'Programs & Activities', subcategory: 'Evangelism programs', amount: 500.00, paymentMethod: 'cash' },
-    { id: '5', date: '2024-03-10', category: 'Capital Expenditure', subcategory: 'Equipment purchases (PA system, instruments)', amount: 3500.00, paymentMethod: 'bank-transfer', payee: 'Sound Systems Ltd' },
-  ]);
-
-  // Calculate current month stats for finance officers
-  const currentMonthStats = useMemo(() => {
+  const duesMonthStats = useMemo(() => {
     const now = new Date();
     const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-    
-    const monthIncome = incomeEntries
-      .filter(entry => entry.date.startsWith(currentMonth))
-      .reduce((sum, entry) => sum + entry.amount, 0);
-    
-    const monthExpenditure = expenditureEntries
-      .filter(entry => entry.date.startsWith(currentMonth))
-      .reduce((sum, entry) => sum + entry.amount, 0);
-    
-    const netIncome = monthIncome - monthExpenditure;
-    
-    // Previous month for comparison
     const prevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const prevMonthStr = `${prevMonth.getFullYear()}-${String(prevMonth.getMonth() + 1).padStart(2, '0')}`;
-    
-    const prevMonthIncome = incomeEntries
-      .filter(entry => entry.date.startsWith(prevMonthStr))
-      .reduce((sum, entry) => sum + entry.amount, 0);
-    
-    const prevMonthExpenditure = expenditureEntries
-      .filter(entry => entry.date.startsWith(prevMonthStr))
-      .reduce((sum, entry) => sum + entry.amount, 0);
-    
-    const incomeChange = prevMonthIncome > 0 
-      ? ((monthIncome - prevMonthIncome) / prevMonthIncome * 100).toFixed(1)
-      : '0';
-    
-    const expenditureChange = prevMonthExpenditure > 0
-      ? ((monthExpenditure - prevMonthExpenditure) / prevMonthExpenditure * 100).toFixed(1)
-      : '0';
-    
-    return {
-      income: monthIncome,
-      expenditure: monthExpenditure,
-      net: netIncome,
-      incomeChange: parseFloat(incomeChange),
-      expenditureChange: parseFloat(expenditureChange),
-      incomeCount: incomeEntries.filter(entry => entry.date.startsWith(currentMonth)).length,
-      expenditureCount: expenditureEntries.filter(entry => entry.date.startsWith(currentMonth)).length,
-    };
-  }, [incomeEntries, expenditureEntries]);
 
-  // Get recent transactions for finance officers
-  const recentTransactions = useMemo(() => {
-    const allTransactions = [
-      ...incomeEntries.slice(0, 5).map(entry => ({
-        date: entry.date,
-        description: entry.subcategory ? `${entry.category} - ${entry.subcategory}` : entry.category,
-        category: entry.category,
-        amount: entry.amount,
-        type: 'income' as const,
-        paymentMethod: entry.paymentMethod,
-      })),
-      ...expenditureEntries.slice(0, 5).map(entry => ({
-        date: entry.date,
-        description: entry.payee ? `${entry.category} - ${entry.payee}` : entry.subcategory ? `${entry.category} - ${entry.subcategory}` : entry.category,
-        category: entry.category,
-        amount: entry.amount,
-        type: 'expense' as const,
-        paymentMethod: entry.paymentMethod,
-      })),
-    ];
-    
-    return allTransactions
+    const collected = duesPayments
+      .filter((p) => p.date.startsWith(currentMonth))
+      .reduce((sum, p) => sum + p.amount, 0);
+    const prevCollected = duesPayments
+      .filter((p) => p.date.startsWith(prevMonthStr))
+      .reduce((sum, p) => sum + p.amount, 0);
+
+    const expected = EXPECTED_MONTHLY_DUES_TOTAL;
+    const outstanding = Math.max(0, expected - collected);
+    const prevOutstanding = Math.max(0, expected - prevCollected);
+    const collectionPct = expected > 0 ? (collected / expected) * 100 : 0;
+    const prevCollectionPct = expected > 0 ? (prevCollected / expected) * 100 : 0;
+    const collectedChangeVsPrev =
+      prevCollected > 0 ? ((collected - prevCollected) / prevCollected) * 100 : collected > 0 ? 100 : 0;
+
+    return {
+      collected,
+      expected,
+      outstanding,
+      collectionPct,
+      collectedChangeVsPrev: parseFloat(collectedChangeVsPrev.toFixed(1)),
+      paymentCount: duesPayments.filter((p) => p.date.startsWith(currentMonth)).length,
+      prevCollected,
+      prevOutstanding,
+      targetProgressVsPrev: parseFloat((collectionPct - prevCollectionPct).toFixed(1)),
+    };
+  }, [duesPayments]);
+
+  const recentDuesPayments = useMemo(() => {
+    return [...duesPayments]
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-      .slice(0, 5)
-      .map(transaction => {
-        const date = new Date(transaction.date);
+      .slice(0, 8)
+      .map((p) => {
+        const date = new Date(p.date);
         const today = new Date();
         const diffTime = Math.abs(today.getTime() - date.getTime());
         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-        
         let dateLabel = '';
         if (diffDays === 0) dateLabel = 'Today';
         else if (diffDays === 1) dateLabel = 'Yesterday';
         else if (diffDays <= 7) dateLabel = `${diffDays} days ago`;
         else dateLabel = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-        
         return {
-          ...transaction,
-          date: dateLabel,
-          amount: transaction.type === 'income' 
-            ? `GHC ${transaction.amount.toFixed(2)}`
-            : `-GHC ${transaction.amount.toFixed(2)}`,
+          id: p.id,
+          dateLabel,
+          memberName: p.memberName,
+          method: p.method,
+          amountLabel: `GHC ${p.amount.toFixed(2)}`,
         };
       });
-  }, [incomeEntries, expenditureEntries]);
+  }, [duesPayments]);
 
-  const categoryColors: { [key: string]: string } = {
-    'Offerings': 'bg-green-500',
-    'Sunday Offerings': 'bg-green-500',
-    'Mid-week Services Offerings': 'bg-green-500',
-    'Special Thanksgiving Offerings': 'bg-green-500',
-    'Harvest / Anniversary Offerings': 'bg-green-500',
-    'Donations': 'bg-blue-500',
-    'Special Society Funds': 'bg-purple-500',
-    'Operational Expenses': 'bg-red-500',
-    'Payroll & Allowances': 'bg-orange-500',
-    'Programs & Activities': 'bg-yellow-500',
-    'Capital Expenditure': 'bg-pink-500',
-  };
+  const executiveStats = useMemo(
+    () => ({
+      members: {
+        total: 450,
+        active: 380,
+        newThisMonth: 12,
+        growth: 2.5,
+      },
+      attendance: {
+        totalThisMonth: 2840,
+        averagePerService: 142,
+        servicesThisMonth: 20,
+        growth: 5.2,
+      },
+      dues: duesMonthStats,
+      organizations: {
+        total: 11,
+        activeLeaders: 16,
+      },
+    }),
+    [duesMonthStats]
+  );
+
+  const headPastorRecentActivity = useMemo(
+    () => [
+      {
+        id: 1,
+        type: 'dues',
+        title: 'Welfare / dues payment',
+        description: `GHC ${duesPayments[0]?.amount.toFixed(2)} — ${duesPayments[0]?.memberName}`,
+        time: '2 hours ago',
+        icon: HiReceiptRefund,
+        color: 'text-green-600',
+        bgColor: 'bg-green-100',
+        href: '/dashboard/welfare-dues',
+      },
+      {
+        id: 2,
+        type: 'member',
+        title: 'New member registered',
+        description: 'John Doe joined the parish',
+        time: '1 day ago',
+        icon: HiOutlineUsers,
+        color: 'text-blue-600',
+        bgColor: 'bg-blue-100',
+        href: '/dashboard/members',
+      },
+      {
+        id: 3,
+        type: 'attendance',
+        title: 'Sunday Service recorded',
+        description: '102 attendees recorded',
+        time: '1 day ago',
+        icon: HiOutlineClipboardCheck,
+        color: 'text-green-600',
+        bgColor: 'bg-green-100',
+        href: '/dashboard/attendance',
+      },
+      {
+        id: 4,
+        type: 'dues',
+        title: 'Partial dues recorded',
+        description: `GHC ${duesPayments[2]?.amount.toFixed(2)} — ${duesPayments[2]?.memberName}`,
+        time: '2 days ago',
+        icon: HiPlus,
+        color: 'text-emerald-600',
+        bgColor: 'bg-emerald-100',
+        href: '/dashboard/welfare-dues',
+      },
+      {
+        id: 5,
+        type: 'dues',
+        title: 'Monthly dues summary updated',
+        description: `${duesMonthStats.collectionPct.toFixed(0)}% of the monthly target collected`,
+        time: '3 days ago',
+        icon: HiOutlineChartBar,
+        color: 'text-teal-600',
+        bgColor: 'bg-teal-100',
+        href: '/dashboard/generate-report',
+      },
+    ],
+    [duesPayments, duesMonthStats.collectionPct]
+  );
 
   // Pattern SVG definitions
   const patternStyles = [
@@ -216,49 +277,6 @@ export default function Dashboard() {
       totalMembers: 450,
       activeLeaders: 16,
     };
-
-    const recentActivity = useMemo(() => [
-      {
-        id: 1,
-        type: 'member',
-        title: 'New member registered',
-        description: 'John Doe joined the parish',
-        time: '2 hours ago',
-        icon: HiOutlineUsers,
-        color: 'text-blue-600',
-        bgColor: 'bg-blue-100',
-      },
-      {
-        id: 2,
-        type: 'attendance',
-        title: 'Sunday Service recorded',
-        description: '102 attendees recorded',
-        time: '1 day ago',
-        icon: HiOutlineClipboardCheck,
-        color: 'text-green-600',
-        bgColor: 'bg-green-100',
-      },
-      {
-        id: 3,
-        type: 'organization',
-        title: 'New organization created',
-        description: 'Youth Fellowship added',
-        time: '2 days ago',
-        icon: HiOutlineOfficeBuilding,
-        color: 'text-purple-600',
-        bgColor: 'bg-purple-100',
-      },
-      {
-        id: 4,
-        type: 'communication',
-        title: 'Announcement sent',
-        description: 'Weekly bulletin sent to all members',
-        time: '3 days ago',
-        icon: HiOutlineChatAlt,
-        color: 'text-orange-600',
-        bgColor: 'bg-orange-100',
-      },
-    ], []);
 
     const adminStats = [
       {
@@ -300,7 +318,7 @@ export default function Dashboard() {
             Welcome back, {user?.name || 'Admin'}!
           </h1>
           <p className="text-sm sm:text-base text-gray-600 mt-1">
-            Here's an overview of your parish administration
+            Here is an overview of parish administration for St. Joseph Catholic Church
           </p>
         </div>
 
@@ -440,7 +458,7 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent className="relative z-10">
             <div className="space-y-4">
-              {recentActivity.map((activity) => {
+              {ADMIN_RECENT_ACTIVITY.map((activity) => {
                 const Icon = activity.icon;
                 return (
                   <div key={activity.id} className="flex items-center gap-4 py-3 border-b border-gray-100 last:border-0">
@@ -463,40 +481,53 @@ export default function Dashboard() {
     );
   }
 
-  // Financial Dashboard for Finance Officers
+  // Finance officer: welfare & dues only (no general ledger in this build)
   if (isFinanceOfficer) {
     const stats = [
       {
-        title: 'Total Income',
-        value: `GHC ${currentMonthStats.income.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-        change: `${currentMonthStats.incomeChange >= 0 ? '+' : ''}${currentMonthStats.incomeChange}%`,
-        trend: currentMonthStats.incomeChange >= 0 ? 'up' : 'down',
-        icon: HiTrendingUp,
+        title: 'Dues collected (this month)',
+        value: `GHC ${duesMonthStats.collected.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+        change: `${duesMonthStats.collectedChangeVsPrev >= 0 ? '+' : ''}${duesMonthStats.collectedChangeVsPrev}% vs last month`,
+        trend: duesMonthStats.collectedChangeVsPrev >= 0 ? ('up' as const) : ('down' as const),
+        icon: duesMonthStats.collectedChangeVsPrev >= 0 ? HiTrendingUp : HiTrendingDown,
         color: 'text-green-600',
         bgColor: 'bg-green-100',
       },
       {
-        title: 'Total Expenditure',
-        value: `GHC ${currentMonthStats.expenditure.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-        change: `${currentMonthStats.expenditureChange >= 0 ? '+' : ''}${currentMonthStats.expenditureChange}%`,
-        trend: currentMonthStats.expenditureChange >= 0 ? 'up' : 'down',
-        icon: HiTrendingDown,
-        color: 'text-red-600',
-        bgColor: 'bg-red-100',
+        title: 'Outstanding (this month)',
+        value: `GHC ${duesMonthStats.outstanding.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+        change: `Target GHC ${duesMonthStats.expected.toFixed(2)}`,
+        trend:
+          duesMonthStats.outstanding < duesMonthStats.prevOutstanding
+            ? ('up' as const)
+            : duesMonthStats.outstanding > duesMonthStats.prevOutstanding
+              ? ('down' as const)
+              : ('neutral' as const),
+        icon: HiReceiptRefund,
+        color: 'text-amber-700',
+        bgColor: 'bg-amber-100',
       },
       {
-        title: 'Net Income',
-        value: `GHC ${currentMonthStats.net.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-        change: currentMonthStats.net >= 0 ? 'Surplus' : 'Deficit',
-        trend: currentMonthStats.net >= 0 ? 'up' : 'down',
-        icon: currentMonthStats.net >= 0 ? HiTrendingUp : HiTrendingDown,
-        color: currentMonthStats.net >= 0 ? 'text-green-600' : 'text-red-600',
-        bgColor: currentMonthStats.net >= 0 ? 'bg-green-100' : 'bg-red-100',
+        title: 'Collection progress',
+        value: `${duesMonthStats.collectionPct.toFixed(0)}%`,
+        change: `${duesMonthStats.paymentCount} payment${duesMonthStats.paymentCount === 1 ? '' : 's'} logged`,
+        trend: duesMonthStats.targetProgressVsPrev >= 0 ? ('up' as const) : ('down' as const),
+        icon: HiOutlineChartBar,
+        color: 'text-teal-700',
+        bgColor: 'bg-teal-100',
       },
     ];
 
     return (
       <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
+            Welcome back, {user?.name || 'Finance'}!
+          </h1>
+          <p className="text-sm sm:text-base text-gray-600 mt-1">
+            Welfare and monthly dues for St. Joseph Catholic Church — record payments and run reports
+          </p>
+        </div>
         {/* Main Stats Row */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
           {stats.map((stat, index) => {
@@ -517,7 +548,15 @@ export default function Dashboard() {
                         <div className="flex items-center gap-1">
                           {stat.trend === 'up' && <HiArrowUp className="h-3 w-3 text-green-600" />}
                           {stat.trend === 'down' && <HiArrowDown className="h-3 w-3 text-red-600" />}
-                          <p className={`text-xs ${stat.trend === 'up' ? 'text-green-600' : stat.trend === 'down' ? 'text-red-600' : 'text-gray-600'}`}>
+                          <p
+                            className={`text-xs ${
+                              stat.trend === 'up'
+                                ? 'text-green-600'
+                                : stat.trend === 'down'
+                                  ? 'text-red-600'
+                                  : 'text-gray-600'
+                            }`}
+                          >
                             {stat.change}
                           </p>
                         </div>
@@ -535,7 +574,7 @@ export default function Dashboard() {
 
         {/* Main Content Row */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Financial Overview Card */}
+          {/* Welfare & dues overview */}
           <Card className="lg:col-span-2 relative overflow-hidden">
             <div 
               className="absolute inset-0"
@@ -547,32 +586,50 @@ export default function Dashboard() {
             <div className="absolute bottom-0 left-0 w-24 h-24 bg-green-400 rounded-full blur-2xl opacity-8" />
             <CardHeader className="pb-4 relative z-10">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-base font-semibold text-gray-900">Financial Overview</CardTitle>
-                <HiChevronRight className="h-4 w-4 text-green-600" />
+                <CardTitle className="text-base font-semibold text-gray-900">Welfare & dues overview</CardTitle>
+                <Link href="/dashboard/welfare-dues" className="text-green-600 hover:text-green-700">
+                  <HiChevronRight className="h-4 w-4" />
+                </Link>
               </div>
             </CardHeader>
             <CardContent className="relative z-10">
               <div className="space-y-4">
-                <div>
-                  <p className="text-xs text-gray-600 mb-1">Current Balance (This Month)</p>
-                  <p className={`text-2xl font-semibold ${currentMonthStats.net >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                    GHC {currentMonthStats.net.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    {currentMonthStats.incomeCount} income entries • {currentMonthStats.expenditureCount} expenditure entries
-                  </p>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="rounded-lg border border-green-200 bg-green-50 p-3">
+                    <p className="text-xs text-gray-600">Collected (this month)</p>
+                    <p className="text-lg font-semibold text-green-700">
+                      GHC {duesMonthStats.collected.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </p>
+                  </div>
+                  <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                    <p className="text-xs text-gray-600">Monthly target</p>
+                    <p className="text-lg font-semibold text-gray-900">
+                      GHC {duesMonthStats.expected.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">{WELFARE_ROSTER_MEMBER_COUNT} members × GHC {MONTHLY_DUES_GHC}</p>
+                  </div>
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                    <p className="text-xs text-gray-600">Outstanding</p>
+                    <p className="text-lg font-semibold text-amber-800">
+                      GHC {duesMonthStats.outstanding.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </p>
+                  </div>
                 </div>
+                <p className="text-xs text-gray-500">
+                  {duesMonthStats.paymentCount} payment{duesMonthStats.paymentCount === 1 ? '' : 's'} recorded this month ·{' '}
+                  {duesMonthStats.collectionPct.toFixed(0)}% of target
+                </p>
                 <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
-                  <Link href="/dashboard/record-income" className="flex-1">
+                  <Link href="/dashboard/welfare-dues" className="flex-1">
                     <Button className="w-full bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800">
-                      <HiPlus className="h-4 w-4 mr-2" />
-                      Record Income
+                      <HiReceiptRefund className="h-4 w-4 mr-2" />
+                      Open Welfare / Dues
                     </Button>
                   </Link>
-                  <Link href="/dashboard/expenditure" className="flex-1">
-                    <Button variant="outline" className="w-full border-red-300 text-red-600 hover:bg-red-50">
-                      <HiMinus className="h-4 w-4 mr-2" />
-                      Record Expenditure
+                  <Link href="/dashboard/generate-report" className="flex-1">
+                    <Button variant="outline" className="w-full border-green-300 text-green-700 hover:bg-green-50">
+                      <HiOutlineChartBar className="h-4 w-4 mr-2" />
+                      Generate report
                     </Button>
                   </Link>
                 </div>
@@ -594,17 +651,19 @@ export default function Dashboard() {
             <CardContent className="p-6 relative z-10">
               <div className="mb-4">
                 <CardTitle className="text-base font-semibold text-white mb-2">Quick Actions</CardTitle>
-                <p className="text-xs text-green-50">Manage your parish finances efficiently with quick access to key functions.</p>
+                <p className="text-xs text-green-50">Record dues, check balances, and export welfare summaries.</p>
               </div>
               <div className="space-y-2">
-                <Link href="/dashboard/generate-report">
+                <Link href="/dashboard/welfare-dues">
                   <Button variant="outline" className="w-full bg-white text-green-600 hover:bg-green-50 border-0 mb-2">
-                    Generate Report
+                    <HiReceiptRefund className="h-4 w-4 mr-2" />
+                    Welfare / Dues
                   </Button>
                 </Link>
-                <Link href="/dashboard/record-income">
+                <Link href="/dashboard/generate-report">
                   <Button variant="outline" className="w-full bg-white text-green-600 hover:bg-green-50 border-0">
-                    View All Income
+                    <HiOutlineChartBar className="h-4 w-4 mr-2" />
+                    Generate report
                   </Button>
                 </Link>
               </div>
@@ -622,36 +681,39 @@ export default function Dashboard() {
           />
           <CardHeader className="pb-4 relative z-10">
             <div className="flex items-center justify-between">
-              <CardTitle className="text-base font-semibold text-gray-900">Recent Financial Transactions</CardTitle>
-              <button className="text-xs text-green-600 hover:text-green-700 font-medium flex items-center gap-1">
-                See more
+              <CardTitle className="text-base font-semibold text-gray-900">Recent dues payments</CardTitle>
+              <Link
+                href="/dashboard/welfare-dues"
+                className="text-xs text-green-600 hover:text-green-700 font-medium flex items-center gap-1"
+              >
+                View ledger
                 <HiOutlineArrowRight className="h-3 w-3" />
-              </button>
+              </Link>
             </div>
           </CardHeader>
           <CardContent className="relative z-10">
             <div className="space-y-4">
-              {recentTransactions.map((transaction, index) => (
-                <div key={index} className="flex items-center justify-between py-3 border-b border-gray-100 last:border-0">
+              {recentDuesPayments.map((row) => (
+                <div key={row.id} className="flex items-center justify-between py-3 border-b border-gray-100 last:border-0">
                   <div className="flex items-center gap-4 flex-1">
-                    <div className={`w-2 h-2 rounded-full ${categoryColors[transaction.category] || 'bg-gray-400'}`}></div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-medium text-gray-900">{transaction.description}</p>
-                      <div className="flex items-center gap-2 mt-1">
-                        <p className="text-xs text-gray-500">{transaction.date}</p>
+                    <div className="h-2 w-2 flex-shrink-0 rounded-full bg-green-500" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-medium text-gray-900">{row.memberName}</p>
+                      <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                        <p className="text-xs text-gray-500">{row.dateLabel}</p>
                         <span className="text-xs text-gray-400">•</span>
-                        <p className="text-xs text-gray-500">{transaction.category}</p>
+                        <p className="text-xs text-gray-500">{row.method}</p>
+                        <span className="text-xs text-gray-400">•</span>
+                        <p className="text-xs text-gray-500">Welfare / dues</p>
                       </div>
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className={`text-xs font-semibold ${transaction.type === 'income' ? 'text-green-600' : 'text-red-600'}`}>
-                      {transaction.amount}
-                    </p>
+                    <p className="text-xs font-semibold text-green-600">{row.amountLabel}</p>
                   </div>
-                  <button className="ml-4 p-1 hover:bg-gray-100 rounded">
+                  <Link href="/dashboard/welfare-dues" className="ml-4 rounded p-1 hover:bg-gray-100">
                     <HiChevronRight className="h-3 w-3 text-gray-400" />
-                  </button>
+                  </Link>
                 </div>
               ))}
             </div>
@@ -665,104 +727,7 @@ export default function Dashboard() {
   const isHeadPastor = hasRole('head_pastor');
   
   if (isHeadPastor) {
-    // Sample data for head pastor dashboard
-    const executiveStats = useMemo(() => {
-    const now = new Date();
-    const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-    
-    const monthIncome = incomeEntries
-      .filter(entry => entry.date.startsWith(currentMonth))
-      .reduce((sum, entry) => sum + entry.amount, 0);
-    
-    const monthExpenditure = expenditureEntries
-      .filter(entry => entry.date.startsWith(currentMonth))
-      .reduce((sum, entry) => sum + entry.amount, 0);
-    
-    return {
-      members: {
-        total: 450,
-        active: 380,
-        newThisMonth: 12,
-        growth: 2.5,
-      },
-      attendance: {
-        totalThisMonth: 2840,
-        averagePerService: 142,
-        servicesThisMonth: 20,
-        growth: 5.2,
-      },
-      finances: {
-        income: monthIncome,
-        expenditure: monthExpenditure,
-        net: monthIncome - monthExpenditure,
-        tithes: 12500.00,
-      },
-      organizations: {
-        total: 11,
-        activeLeaders: 16,
-      },
-    };
-  }, [incomeEntries, expenditureEntries]);
-
-  const recentActivity = useMemo(() => [
-    {
-      id: 1,
-      type: 'financial',
-      title: 'Income recorded',
-      description: `GHC ${incomeEntries[0]?.amount.toFixed(2)} - ${incomeEntries[0]?.category}`,
-      time: '2 hours ago',
-      icon: HiPlus,
-      color: 'text-green-600',
-      bgColor: 'bg-green-100',
-      href: '/dashboard/record-income',
-    },
-    {
-      id: 2,
-      type: 'member',
-      title: 'New member registered',
-      description: 'John Doe joined the parish',
-      time: '1 day ago',
-      icon: HiOutlineUsers,
-      color: 'text-blue-600',
-      bgColor: 'bg-blue-100',
-      href: '/dashboard/members',
-    },
-    {
-      id: 3,
-      type: 'attendance',
-      title: 'Sunday Service recorded',
-      description: '102 attendees recorded',
-      time: '1 day ago',
-      icon: HiOutlineClipboardCheck,
-      color: 'text-green-600',
-      bgColor: 'bg-green-100',
-      href: '/dashboard/attendance',
-    },
-    {
-      id: 4,
-      type: 'financial',
-      title: 'Tithe recorded',
-      description: 'GHC 150.00 - Member tithe',
-      time: '2 days ago',
-      icon: HiReceiptRefund,
-      color: 'text-purple-600',
-      bgColor: 'bg-purple-100',
-      href: '/dashboard/tithes',
-    },
-    {
-      id: 5,
-      type: 'expenditure',
-      title: 'Expenditure recorded',
-      description: `GHC ${expenditureEntries[0]?.amount.toFixed(2)} - ${expenditureEntries[0]?.category}`,
-      time: '3 days ago',
-      icon: HiMinus,
-      color: 'text-red-600',
-      bgColor: 'bg-red-100',
-      href: '/dashboard/expenditure',
-    },
-  ], [incomeEntries, expenditureEntries]);
-
-  const executiveStatsCards = [
+    const executiveStatsCards = [
     {
       title: 'Total Members',
       value: executiveStats.members.total.toLocaleString(),
@@ -786,15 +751,15 @@ export default function Dashboard() {
       href: '/dashboard/attendance',
     },
     {
-      title: 'Net Income',
-      value: `GHC ${executiveStats.finances.net.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-      subtitle: `Income: GHC ${executiveStats.finances.income.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-      change: executiveStats.finances.net >= 0 ? 'Surplus' : 'Deficit',
-      trend: executiveStats.finances.net >= 0 ? 'up' : 'down',
-      icon: executiveStats.finances.net >= 0 ? HiTrendingUp : HiTrendingDown,
-      color: executiveStats.finances.net >= 0 ? 'text-green-600' : 'text-red-600',
-      bgColor: executiveStats.finances.net >= 0 ? 'bg-green-100' : 'bg-red-100',
-      href: '/dashboard/generate-report',
+      title: 'Dues collected',
+      value: `GHC ${executiveStats.dues.collected.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      subtitle: `${executiveStats.dues.collectionPct.toFixed(0)}% of GHC ${executiveStats.dues.expected} monthly target`,
+      change: `${executiveStats.dues.collectedChangeVsPrev >= 0 ? '+' : ''}${executiveStats.dues.collectedChangeVsPrev}% vs last month`,
+      trend: executiveStats.dues.collectedChangeVsPrev >= 0 ? ('up' as const) : ('down' as const),
+      icon: HiReceiptRefund,
+      color: 'text-green-600',
+      bgColor: 'bg-green-100',
+      href: '/dashboard/welfare-dues',
     },
     {
       title: 'Organizations',
@@ -807,9 +772,9 @@ export default function Dashboard() {
       bgColor: 'bg-purple-100',
       href: '/dashboard/departments',
     },
-  ];
+    ];
 
-  return (
+    return (
     <div className="space-y-6">
       {/* Welcome Header */}
       <div>
@@ -817,7 +782,7 @@ export default function Dashboard() {
           Welcome, {user?.name || 'User'}!
         </h1>
         <p className="text-sm sm:text-base text-gray-600 mt-1">
-          Executive overview of parish operations and key metrics
+          Executive overview for St. Joseph Catholic Church — parish operations and key metrics
         </p>
       </div>
 
@@ -862,7 +827,7 @@ export default function Dashboard() {
 
       {/* Main Content Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Financial Overview */}
+        {/* Welfare & dues overview */}
         <Card className="lg:col-span-2 relative overflow-hidden">
           <div 
             className="absolute inset-0"
@@ -874,59 +839,54 @@ export default function Dashboard() {
           <div className="absolute bottom-0 left-0 w-24 h-24 bg-blue-400 rounded-full blur-2xl opacity-8" />
           <CardHeader className="pb-4 relative z-10">
             <div className="flex items-center justify-between">
-              <CardTitle className="text-base font-semibold text-gray-900">Financial Overview</CardTitle>
-              <Link href="/dashboard/generate-report">
-                <Button variant="outline" size="sm">
-                  View Reports
-                  <HiChevronRight className="h-4 w-4 ml-1" />
-                </Button>
-              </Link>
+              <CardTitle className="text-base font-semibold text-gray-900">Welfare & dues overview</CardTitle>
+              <div className="flex flex-wrap gap-2">
+                <Link href="/dashboard/welfare-dues">
+                  <Button variant="outline" size="sm">
+                    Welfare / Dues
+                    <HiChevronRight className="h-4 w-4 ml-1" />
+                  </Button>
+                </Link>
+                <Link href="/dashboard/generate-report">
+                  <Button variant="outline" size="sm">
+                    Reports
+                    <HiChevronRight className="h-4 w-4 ml-1" />
+                  </Button>
+                </Link>
+              </div>
             </div>
           </CardHeader>
           <CardContent className="relative z-10">
             <div className="space-y-4 sm:space-y-6">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
-                <div className="bg-green-50 rounded-lg p-3 sm:p-4 border border-green-200">
-                  <p className="text-xs text-gray-600 mb-1">Total Income</p>
-                  <p className="text-lg sm:text-xl font-semibold text-green-700 break-words">
-                    GHC {executiveStats.finances.income.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              <p className="text-sm text-gray-600">
+                Parish financial tracking in this system is limited to <strong className="font-medium text-gray-800">monthly welfare dues</strong> (GHC{' '}
+                {MONTHLY_DUES_GHC} per member on the roster). Use Welfare/Dues to record payments and follow up on balances.
+              </p>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
+                <div className="rounded-lg border border-green-200 bg-green-50 p-3 sm:p-4">
+                  <p className="mb-1 text-xs text-gray-600">Collected (this month)</p>
+                  <p className="break-words text-lg font-semibold text-green-700 sm:text-xl">
+                    GHC {executiveStats.dues.collected.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </p>
-                  <Link href="/dashboard/record-income" className="text-xs text-green-600 hover:text-green-700 mt-2 inline-block">
-                    View Details →
-                  </Link>
-                </div>
-                <div className="bg-red-50 rounded-lg p-3 sm:p-4 border border-red-200">
-                  <p className="text-xs text-gray-600 mb-1">Total Expenditure</p>
-                  <p className="text-lg sm:text-xl font-semibold text-red-700 break-words">
-                    GHC {executiveStats.finances.expenditure.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </p>
-                  <Link href="/dashboard/expenditure" className="text-xs text-red-600 hover:text-red-700 mt-2 inline-block">
-                    View Details →
-                  </Link>
-                </div>
-                <div className={`rounded-lg p-3 sm:p-4 border ${executiveStats.finances.net >= 0 ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
-                  <p className="text-xs text-gray-600 mb-1">Net Balance</p>
-                  <p className={`text-lg sm:text-xl font-semibold ${executiveStats.finances.net >= 0 ? 'text-green-700' : 'text-red-700'} break-words`}>
-                    GHC {executiveStats.finances.net.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </p>
-                  <p className={`text-xs mt-2 ${executiveStats.finances.net >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                    {executiveStats.finances.net >= 0 ? 'Surplus' : 'Deficit'}
+                  <p className="mt-2 text-xs text-green-700">
+                    {executiveStats.dues.paymentCount} payment{executiveStats.dues.paymentCount === 1 ? '' : 's'} logged
                   </p>
                 </div>
-              </div>
-              <div className="bg-purple-50 rounded-lg p-4 border border-purple-200">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs text-gray-600 mb-1">Total Tithes</p>
-                    <p className="text-xl font-semibold text-purple-700">
-                      GHC {executiveStats.finances.tithes.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </p>
-                  </div>
-                  <Link href="/dashboard/tithes">
-                    <Button variant="outline" size="sm" className="border-purple-300 text-purple-700 hover:bg-purple-100">
-                      View Tithes
-                    </Button>
-                  </Link>
+                <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 sm:p-4">
+                  <p className="mb-1 text-xs text-gray-600">Monthly target</p>
+                  <p className="break-words text-lg font-semibold text-gray-900 sm:text-xl">
+                    GHC {executiveStats.dues.expected.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </p>
+                  <p className="mt-2 text-xs text-gray-500">
+                    {WELFARE_ROSTER_MEMBER_COUNT} members × GHC {MONTHLY_DUES_GHC}
+                  </p>
+                </div>
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 sm:p-4">
+                  <p className="mb-1 text-xs text-gray-600">Outstanding</p>
+                  <p className="break-words text-lg font-semibold text-amber-800 sm:text-xl">
+                    GHC {executiveStats.dues.outstanding.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </p>
+                  <p className="mt-2 text-xs text-amber-800">{executiveStats.dues.collectionPct.toFixed(0)}% of target collected</p>
                 </div>
               </div>
             </div>
@@ -949,6 +909,12 @@ export default function Dashboard() {
               <p className="text-xs text-blue-100">Navigate to key areas</p>
             </div>
             <div className="space-y-2">
+              <Link href="/dashboard/welfare-dues">
+                <Button variant="outline" className="w-full bg-white text-blue-600 hover:bg-blue-50 border-0 mb-2">
+                  <HiReceiptRefund className="h-4 w-4 mr-2" />
+                  Welfare / Dues
+                </Button>
+              </Link>
               <Link href="/dashboard/members">
                 <Button variant="outline" className="w-full bg-white text-blue-600 hover:bg-blue-50 border-0 mb-2">
                   <HiOutlineUsers className="h-4 w-4 mr-2" />
@@ -1082,7 +1048,7 @@ export default function Dashboard() {
         </CardHeader>
         <CardContent className="relative z-10">
           <div className="space-y-4">
-            {recentActivity.map((activity) => {
+            {headPastorRecentActivity.map((activity) => {
               const Icon = activity.icon;
               return (
                 <Link key={activity.id} href={activity.href}>
@@ -1115,7 +1081,7 @@ export default function Dashboard() {
           Dashboard
         </h1>
         <p className="text-gray-600 mt-1">
-          Welcome to your dashboard
+          Welcome to the St. Joseph Catholic Church administration portal
         </p>
       </div>
       <Card>
