@@ -31,6 +31,7 @@ function UsersAndRolesContent() {
     getRoles,
     getUsers,
     getStoredUser,
+    getBackendUser,
     addRole,
     updateRole,
     addUser,
@@ -142,7 +143,7 @@ function UsersAndRolesContent() {
   };
 
   // Get the current user being edited to access their permissions
-  const editingUser = editingUserId ? users.find(u => u.id === editingUserId) : null;
+  const editingUser = editingUserId ? getBackendUser(editingUserId) : null;
 
   const closeUserForm = () => {
     setUserFormOpen(false);

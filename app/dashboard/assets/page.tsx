@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   HiOutlineCube,
   HiOutlineCollection,
@@ -9,123 +9,226 @@ import {
 } from 'react-icons/hi';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Table, Tag, Space, Button as AntButton, Input, Drawer, Form, Radio, InputNumber, Select } from 'antd';
+import { Table, Tag, Space, Button as AntButton, Input, Drawer, Form, Radio, InputNumber, Select, Spin } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { SearchOutlined, EditOutlined, EyeOutlined, PlusOutlined } from '@ant-design/icons';
+import { SearchOutlined, EditOutlined, EyeOutlined, PlusOutlined, LoadingOutlined } from '@ant-design/icons';
+import { useAuth } from '@/lib/auth-context';
+import { useToast } from '@/lib/toast-context';
+import { apiRequest } from '@/lib/api';
 
 interface Asset {
   id: number;
-  name: string;
-  category: string;
-  categoryOther?: string;
-  code: string;
+  asset_name: string;
+  asset_category: string;
+  other_specify?: string;
   quantity: number;
-  unit: string;
-  condition: 'New' | 'Good' | 'Fair' | 'Poor';
+  condition: string;
+}
+
+interface BackendAsset {
+  id: number;
+  asset_name: string;
+  asset_category: string;
+  other_specify?: string;
+  quantity: number;
+  condition: string;
+}
+
+interface AssetResponse {
+  message: string;
+  status: string;
+  assets: BackendAsset[];
 }
 
 export default function AssetsPage() {
+  const { hasPermission, isSuperAdmin } = useAuth();
+  const { showToast } = useToast();
   const [showAddModal, setShowAddModal] = useState(false);
-  const [assets, setAssets] = useState<Asset[]>([
-    {
-      id: 1,
-      name: 'Piano',
-      category: 'Musical Instrument',
-      code: 'AST-001',
-      quantity: 1,
-      unit: 'Piece (pc / pcs)',
-      condition: 'Good',
-    },
-    {
-      id: 2,
-      name: 'Sound System',
-      category: 'Electrical / Sound Equipment',
-      code: 'AST-002',
-      quantity: 1,
-      unit: 'Set',
-      condition: 'New',
-    },
-    {
-      id: 3,
-      name: 'Parish Chairs',
-      category: 'Furniture',
-      code: 'AST-003',
-      quantity: 200,
-      unit: 'Piece (pc / pcs)',
-      condition: 'Good',
-    },
-  ]);
+  const [showViewModal, setShowViewModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
+  const [editingAsset, setEditingAsset] = useState<Asset | null>(null);
+  const [assets, setAssets] = useState<Asset[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [creating, setCreating] = useState(false);
+  const [updating, setUpdating] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [form] = Form.useForm();
+  const [editForm] = Form.useForm();
 
-  // Units of measurement organized by category
-  const unitsOfMeasurement = [
-    // Quantity / Count
-    { value: 'Piece (pc / pcs)', label: 'Piece (pc / pcs)', category: 'Quantity / Count' },
-    { value: 'Item', label: 'Item', category: 'Quantity / Count' },
-    { value: 'Set', label: 'Set', category: 'Quantity / Count' },
-    { value: 'Pair', label: 'Pair', category: 'Quantity / Count' },
-    { value: 'Dozen', label: 'Dozen', category: 'Quantity / Count' },
-    { value: 'Carton', label: 'Carton', category: 'Quantity / Count' },
-    { value: 'Pack', label: 'Pack', category: 'Quantity / Count' },
-    { value: 'Bundle', label: 'Bundle', category: 'Quantity / Count' },
-    { value: 'Roll', label: 'Roll', category: 'Quantity / Count' },
-    // Length
-    { value: 'Millimeter (mm)', label: 'Millimeter (mm)', category: 'Length' },
-    { value: 'Centimeter (cm)', label: 'Centimeter (cm)', category: 'Length' },
-    { value: 'Meter (m)', label: 'Meter (m)', category: 'Length' },
-    { value: 'Kilometer (km)', label: 'Kilometer (km)', category: 'Length' },
-    { value: 'Inch (in)', label: 'Inch (in)', category: 'Length' },
-    { value: 'Foot (ft)', label: 'Foot (ft)', category: 'Length' },
-    { value: 'Yard (yd)', label: 'Yard (yd)', category: 'Length' },
-    // Area
-    { value: 'Square meter (m²)', label: 'Square meter (m²)', category: 'Area' },
-    { value: 'Square foot (ft²)', label: 'Square foot (ft²)', category: 'Area' },
-    { value: 'Square yard (yd²)', label: 'Square yard (yd²)', category: 'Area' },
-    { value: 'Hectare (ha)', label: 'Hectare (ha)', category: 'Area' },
-    { value: 'Acre', label: 'Acre', category: 'Area' },
-    // Volume / Capacity
-    { value: 'Milliliter (ml)', label: 'Milliliter (ml)', category: 'Volume / Capacity' },
-    { value: 'Liter (L)', label: 'Liter (L)', category: 'Volume / Capacity' },
-    { value: 'Cubic meter (m³)', label: 'Cubic meter (m³)', category: 'Volume / Capacity' },
-    { value: 'Gallon', label: 'Gallon', category: 'Volume / Capacity' },
-    { value: 'Barrel', label: 'Barrel', category: 'Volume / Capacity' },
-    // Mass / Weight
-    { value: 'Milligram (mg)', label: 'Milligram (mg)', category: 'Mass / Weight' },
-    { value: 'Gram (g)', label: 'Gram (g)', category: 'Mass / Weight' },
-    { value: 'Kilogram (kg)', label: 'Kilogram (kg)', category: 'Mass / Weight' },
-    { value: 'Tonne (t)', label: 'Tonne (t)', category: 'Mass / Weight' },
-    { value: 'Pound (lb)', label: 'Pound (lb)', category: 'Mass / Weight' },
-    { value: 'Ounce (oz)', label: 'Ounce (oz)', category: 'Mass / Weight' },
-    // Time
-    { value: 'Second (s)', label: 'Second (s)', category: 'Time' },
-    { value: 'Minute (min)', label: 'Minute (min)', category: 'Time' },
-    { value: 'Hour (hr)', label: 'Hour (hr)', category: 'Time' },
-    { value: 'Day', label: 'Day', category: 'Time' },
-    { value: 'Week', label: 'Week', category: 'Time' },
-    { value: 'Month', label: 'Month', category: 'Time' },
-    { value: 'Year', label: 'Year', category: 'Time' },
-    // Temperature
-    { value: 'Celsius (°C)', label: 'Celsius (°C)', category: 'Temperature' },
-    { value: 'Fahrenheit (°F)', label: 'Fahrenheit (°F)', category: 'Temperature' },
-    { value: 'Kelvin (K)', label: 'Kelvin (K)', category: 'Temperature' },
-    // Electricity & Power
-    { value: 'Volt (V)', label: 'Volt (V)', category: 'Electricity & Power' },
-    { value: 'Ampere (A)', label: 'Ampere (A)', category: 'Electricity & Power' },
-    { value: 'Watt (W)', label: 'Watt (W)', category: 'Electricity & Power' },
-    { value: 'Kilowatt (kW)', label: 'Kilowatt (kW)', category: 'Electricity & Power' },
-    { value: 'Ohm (Ω)', label: 'Ohm (Ω)', category: 'Electricity & Power' },
-    // Data / Digital Storage
-    { value: 'Bit', label: 'Bit', category: 'Data / Digital Storage' },
-    { value: 'Byte', label: 'Byte', category: 'Data / Digital Storage' },
-    { value: 'Kilobyte (KB)', label: 'Kilobyte (KB)', category: 'Data / Digital Storage' },
-    { value: 'Megabyte (MB)', label: 'Megabyte (MB)', category: 'Data / Digital Storage' },
-    { value: 'Gigabyte (GB)', label: 'Gigabyte (GB)', category: 'Data / Digital Storage' },
-    { value: 'Terabyte (TB)', label: 'Terabyte (TB)', category: 'Data / Digital Storage' },
-    // Frequency & Sound
-    { value: 'Hertz (Hz)', label: 'Hertz (Hz)', category: 'Frequency & Sound' },
-    { value: 'Decibel (dB)', label: 'Decibel (dB)', category: 'Frequency & Sound' },
+  // Asset categories as specified
+  const assetCategories = [
+    { value: 'musical_instrument', label: 'Musical Instrument' },
+    { value: 'electrical_or_sound_equipment', label: 'Electrical or Sound Equipment' },
+    { value: 'furniture', label: 'Furniture' },
+    { value: 'office_equipment', label: 'Office Equipment' },
+    { value: 'building_or_maintenance_tool', label: 'Building or Maintenance Tool' },
+    { value: 'liturgical_item', label: 'Liturgical Item' },
+    { value: 'others', label: 'Others (specify)' },
   ];
+
+  // Fetch assets from API
+  const fetchAssets = async () => {
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('auth_token');
+      
+      if (!token) {
+        showToast('No authentication token found', 'error');
+        return;
+      }
+
+      const response = await apiRequest<AssetResponse>('/assets', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (response.error) {
+        showToast(`Failed to fetch assets: ${response.error.message}`, 'error');
+        return;
+      }
+
+      if (response.data?.assets) {
+        setAssets(response.data.assets);
+      }
+    } catch (error) {
+      console.error('Error fetching assets:', error);
+      showToast('Failed to fetch assets', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Create asset
+  const createAsset = async (values: any) => {
+    try {
+      setCreating(true);
+      const token = localStorage.getItem('auth_token');
+      
+      if (!token) {
+        showToast('No authentication token found', 'error');
+        return;
+      }
+
+      const payload = {
+        asset: {
+          asset_name: values.asset_name,
+          asset_category: values.asset_category,
+          ...(values.asset_category === 'others' && { other_specify: values.other_specify }),
+          quantity: values.quantity,
+          condition: values.condition,
+        },
+      };
+
+      const response = await apiRequest('/assets', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (response.error) {
+        showToast(`Failed to create asset: ${response.error.message}`, 'error');
+        return;
+      }
+
+      // Success - refresh the assets list
+      await fetchAssets();
+      
+      // Close modal and reset form
+      setShowAddModal(false);
+      form.resetFields();
+
+      // Show success message
+      showToast('Asset created successfully!', 'success');
+    } catch (error) {
+      console.error('Error creating asset:', error);
+      showToast('Failed to create asset', 'error');
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  // Update asset
+  const updateAsset = async (values: any) => {
+    if (!editingAsset) return;
+    
+    try {
+      setUpdating(true);
+      const token = localStorage.getItem('auth_token');
+      
+      if (!token) {
+        showToast('No authentication token found', 'error');
+        return;
+      }
+
+      const payload = {
+        asset: {
+          asset_name: values.asset_name,
+          asset_category: values.asset_category,
+          ...(values.asset_category === 'others' && { other_specify: values.other_specify }),
+          quantity: values.quantity,
+          condition: values.condition,
+        },
+      };
+
+      const response = await apiRequest(`/assets/${editingAsset.id}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (response.error) {
+        showToast(`Failed to update asset: ${response.error.message}`, 'error');
+        return;
+      }
+
+      // Success - refresh the assets list
+      await fetchAssets();
+      
+      // Close modal and reset form
+      setShowEditModal(false);
+      setEditingAsset(null);
+      editForm.resetFields();
+
+      // Show success message
+      showToast('Asset updated successfully!', 'success');
+    } catch (error) {
+      console.error('Error updating asset:', error);
+      showToast('Failed to update asset', 'error');
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  // View asset
+  const viewAsset = (asset: Asset) => {
+    setSelectedAsset(asset);
+    setShowViewModal(true);
+  };
+
+  // Edit asset
+  const editAsset = (asset: Asset) => {
+    setEditingAsset(asset);
+    editForm.setFieldsValue({
+      asset_name: asset.asset_name,
+      asset_category: asset.asset_category,
+      other_specify: asset.other_specify || '',
+      quantity: asset.quantity,
+      condition: asset.condition,
+    });
+    setShowEditModal(true);
+  };
+
+  // Load assets on component mount
+  useEffect(() => {
+    fetchAssets();
+  }, []);
 
   // Pattern styles matching dashboard
   const patternStyles = [
@@ -143,7 +246,7 @@ export default function AssetsPage() {
   // Calculate stats
   const totalAssets = assets.length;
   const totalQuantity = assets.reduce((sum, asset) => sum + asset.quantity, 0);
-  const goodCondition = assets.filter(a => a.condition === 'Good' || a.condition === 'New').length;
+  const goodCondition = assets.filter(a => a.condition === 'good' || a.condition === 'new').length;
 
   const stats = [
     { 
@@ -166,49 +269,48 @@ export default function AssetsPage() {
     },
   ];
 
+  // Get category display name
+  const getCategoryDisplayName = (category: string, otherSpecify?: string) => {
+    if (category === 'others' && otherSpecify) {
+      return otherSpecify;
+    }
+    const categoryObj = assetCategories.find(cat => cat.value === category);
+    return categoryObj ? categoryObj.label : category;
+  };
+
   // Filter assets
   const filteredAssets = assets.filter((asset) =>
-    asset.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    asset.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    asset.category.toLowerCase().includes(searchTerm.toLowerCase())
+    asset.asset_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    asset.asset_category.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (asset.other_specify && asset.other_specify.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   // Table columns
   const columns: ColumnsType<Asset> = [
     {
       title: 'Asset Name',
-      dataIndex: 'name',
-      key: 'name',
+      dataIndex: 'asset_name',
+      key: 'asset_name',
       render: (text: string) => (
         <span className="text-sm font-semibold text-gray-900">{text}</span>
       ),
     },
     {
       title: 'Category',
-      dataIndex: 'category',
-      key: 'category',
+      dataIndex: 'asset_category',
+      key: 'asset_category',
       render: (category: string, record: Asset) => (
         <span className="text-sm text-gray-900">
-          {record.categoryOther || category}
+          {getCategoryDisplayName(category, record.other_specify)}
         </span>
-      ),
-    },
-    {
-      title: 'Code/Tag',
-      dataIndex: 'code',
-      key: 'code',
-      render: (text: string) => (
-        <span className="text-sm font-mono text-gray-700">{text}</span>
       ),
     },
     {
       title: 'Quantity',
       dataIndex: 'quantity',
       key: 'quantity',
-      render: (quantity: number, record: Asset) => (
-        <span className="text-sm text-gray-900">
-          {quantity} {record.unit}
-        </span>
+      render: (quantity: number) => (
+        <span className="text-sm text-gray-900">{quantity}</span>
       ),
       sorter: (a, b) => a.quantity - b.quantity,
     },
@@ -218,14 +320,15 @@ export default function AssetsPage() {
       key: 'condition',
       render: (condition: string) => {
         const colorMap: Record<string, string> = {
-          'New': 'green',
-          'Good': 'blue',
-          'Fair': 'orange',
-          'Poor': 'red',
+          'new': 'green',
+          'good': 'blue',
+          'fair': 'orange',
+          'poor': 'red',
         };
+        const displayCondition = condition.charAt(0).toUpperCase() + condition.slice(1);
         return (
-          <Tag color={colorMap[condition] || 'default'}>
-            {condition}
+          <Tag color={colorMap[condition.toLowerCase()] || 'default'}>
+            {displayCondition}
           </Tag>
         );
       },
@@ -240,33 +343,23 @@ export default function AssetsPage() {
             icon={<EyeOutlined />}
             className="text-blue-600"
             title="View"
+            onClick={() => viewAsset(record)}
           />
-          <AntButton
-            type="link"
-            icon={<EditOutlined />}
-            className="text-green-600"
-            title="Edit"
-          />
+          {(hasPermission('assets_or_equipment') || isSuperAdmin) && (
+            <AntButton
+              type="link"
+              icon={<EditOutlined />}
+              className="text-green-600"
+              title="Edit"
+              onClick={() => editAsset(record)}
+            />
+          )}
         </Space>
       ),
     },
   ];
 
-  const handleAddAsset = (values: any) => {
-    const newAsset: Asset = {
-      id: assets.length + 1,
-      name: values.name,
-      category: values.category === 'Others' ? 'Others' : values.category,
-      categoryOther: values.category === 'Others' ? values.categoryOther : undefined,
-      code: values.code,
-      quantity: values.quantity,
-      unit: values.unit,
-      condition: values.condition,
-    };
-    setAssets([...assets, newAsset]);
-    form.resetFields();
-    setShowAddModal(false);
-  };
+
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -278,10 +371,21 @@ export default function AssetsPage() {
           </h1>
           <p className="text-gray-600 mt-1">Manage parish assets and equipment</p>
         </div>
-        <Button onClick={() => setShowAddModal(true)} className="shadow-lg">
-          <PlusOutlined className="mr-2" />
-          Add Asset/Equipment
-        </Button>
+        {(hasPermission('assets_or_equipment') || isSuperAdmin) && (
+          <div className="flex gap-2">
+            <Button 
+              variant="outline" 
+              onClick={fetchAssets}
+              disabled={loading}
+            >
+              {loading ? <LoadingOutlined spin /> : 'Refresh'}
+            </Button>
+            <Button onClick={() => setShowAddModal(true)} className="shadow-lg">
+              <PlusOutlined className="mr-2" />
+              Add Asset/Equipment
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* Stats Cards */}
@@ -329,16 +433,23 @@ export default function AssetsPage() {
           </div>
         </CardHeader>
         <CardContent className="relative z-10">
-          <Table
-            columns={columns}
-            dataSource={filteredAssets}
-            rowKey="id"
-            pagination={{
-              pageSize: 10,
-              showSizeChanger: true,
-              showTotal: (total) => `Total ${total} assets`,
-            }}
-          />
+          {loading ? (
+            <div className="text-center py-12">
+              <Spin indicator={<LoadingOutlined style={{ fontSize: 24 }} spin />} />
+              <p className="text-gray-500 mt-4">Loading assets...</p>
+            </div>
+          ) : (
+            <Table
+              columns={columns}
+              dataSource={filteredAssets}
+              rowKey="id"
+              pagination={{
+                pageSize: 10,
+                showSizeChanger: true,
+                showTotal: (total) => `Total ${total} assets`,
+              }}
+            />
+          )}
         </CardContent>
       </Card>
 
@@ -356,15 +467,14 @@ export default function AssetsPage() {
         <Form
           form={form}
           layout="vertical"
-          onFinish={handleAddAsset}
+          onFinish={createAsset}
           initialValues={{
-            unit: 'Piece (pc / pcs)',
-            condition: 'Good',
+            condition: 'good',
           }}
         >
           <Form.Item
             label="Asset / Equipment Name"
-            name="name"
+            name="asset_name"
             rules={[{ required: true, message: 'Please enter asset name' }]}
           >
             <Input placeholder="Enter asset/equipment name" size="large" />
@@ -372,47 +482,33 @@ export default function AssetsPage() {
 
           <Form.Item
             label="Asset Category"
-            name="category"
+            name="asset_category"
             rules={[{ required: true, message: 'Please select a category' }]}
           >
-            <Radio.Group>
-              <Space direction="vertical">
-                <Radio value="Musical Instrument">Musical Instrument</Radio>
-                <Radio value="Electrical / Sound Equipment">Electrical / Sound Equipment</Radio>
-                <Radio value="Furniture">Furniture</Radio>
-                <Radio value="Office Equipment">Office Equipment</Radio>
-                <Radio value="Building / Maintenance Tool">Building / Maintenance Tool</Radio>
-                <Radio value="Liturgical Item">Liturgical Item</Radio>
-                <Radio value="Others">Others (specify)</Radio>
-              </Space>
-            </Radio.Group>
+            <Select
+              placeholder="Select category"
+              size="large"
+              options={assetCategories}
+            />
           </Form.Item>
 
           <Form.Item
             noStyle
             shouldUpdate={(prevValues, currentValues) =>
-              prevValues.category !== currentValues.category
+              prevValues.asset_category !== currentValues.asset_category
             }
           >
             {({ getFieldValue }) =>
-              getFieldValue('category') === 'Others' ? (
+              getFieldValue('asset_category') === 'others' ? (
                 <Form.Item
                   label="Specify Category"
-                  name="categoryOther"
+                  name="other_specify"
                   rules={[{ required: true, message: 'Please specify the category' }]}
                 >
                   <Input placeholder="Enter category" size="large" />
                 </Form.Item>
               ) : null
             }
-          </Form.Item>
-
-          <Form.Item
-            label="Asset Code / Tag Number"
-            name="code"
-            rules={[{ required: true, message: 'Please enter asset code/tag number' }]}
-          >
-            <Input placeholder="Enter asset code or tag number" size="large" />
           </Form.Item>
 
           <Form.Item
@@ -432,38 +528,20 @@ export default function AssetsPage() {
           </Form.Item>
 
           <Form.Item
-            label="Unit of Measurement"
-            name="unit"
-            rules={[{ required: true, message: 'Please select unit of measurement' }]}
-          >
-            <Select
-              showSearch
-              placeholder="Search and select unit"
-              size="large"
-              optionFilterProp="label"
-              filterOption={(input, option) =>
-                (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
-              }
-              options={unitsOfMeasurement.map(unit => ({
-                value: unit.value,
-                label: unit.label,
-              }))}
-            />
-          </Form.Item>
-
-          <Form.Item
             label="Condition"
             name="condition"
             rules={[{ required: true, message: 'Please select condition' }]}
           >
-            <Radio.Group>
-              <Space direction="vertical">
-                <Radio value="New">New</Radio>
-                <Radio value="Good">Good</Radio>
-                <Radio value="Fair">Fair</Radio>
-                <Radio value="Poor">Poor</Radio>
-              </Space>
-            </Radio.Group>
+            <Select
+              placeholder="Select condition"
+              size="large"
+              options={[
+                { value: 'new', label: 'New' },
+                { value: 'good', label: 'Good' },
+                { value: 'fair', label: 'Fair' },
+                { value: 'poor', label: 'Poor' },
+              ]}
+            />
           </Form.Item>
 
           <Form.Item className="mt-6">
@@ -475,11 +553,230 @@ export default function AssetsPage() {
                   setShowAddModal(false);
                   form.resetFields();
                 }}
+                disabled={creating}
               >
                 Cancel
               </Button>
-              <Button type="submit">
-                Add Asset/Equipment
+              <Button 
+                type="submit"
+                disabled={creating}
+              >
+                {creating ? (
+                  <>
+                    <Spin indicator={<LoadingOutlined style={{ fontSize: 16 }} spin />} className="mr-2" />
+                    Creating...
+                  </>
+                ) : (
+                  'Add Asset/Equipment'
+                )}
+              </Button>
+            </Space>
+          </Form.Item>
+        </Form>
+      </Drawer>
+
+      {/* View Asset Modal */}
+      <Drawer
+        title="Asset Details"
+        placement="right"
+        width={typeof window !== 'undefined' && window.innerWidth < 640 ? '100%' : 600}
+        open={showViewModal}
+        onClose={() => {
+          setShowViewModal(false);
+          setSelectedAsset(null);
+        }}
+      >
+        {selectedAsset && (
+          <div className="space-y-6">
+            <div className="bg-gray-50 rounded-lg p-4">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Asset Information</h3>
+              
+              <div className="grid grid-cols-1 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Asset Name
+                  </label>
+                  <p className="text-sm text-gray-900 bg-white p-2 rounded border">
+                    {selectedAsset.asset_name}
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Category
+                  </label>
+                  <p className="text-sm text-gray-900 bg-white p-2 rounded border">
+                    {getCategoryDisplayName(selectedAsset.asset_category, selectedAsset.other_specify)}
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Quantity
+                  </label>
+                  <p className="text-sm text-gray-900 bg-white p-2 rounded border">
+                    {selectedAsset.quantity}
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Condition
+                  </label>
+                  <div className="bg-white p-2 rounded border">
+                    <Tag color={
+                      selectedAsset.condition === 'new' ? 'green' :
+                      selectedAsset.condition === 'good' ? 'blue' :
+                      selectedAsset.condition === 'fair' ? 'orange' : 'red'
+                    }>
+                      {selectedAsset.condition.charAt(0).toUpperCase() + selectedAsset.condition.slice(1)}
+                    </Tag>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowViewModal(false);
+                  setSelectedAsset(null);
+                }}
+              >
+                Close
+              </Button>
+              {(hasPermission('assets_or_equipment') || isSuperAdmin) && (
+                <Button
+                  onClick={() => {
+                    setShowViewModal(false);
+                    editAsset(selectedAsset);
+                  }}
+                >
+                  <EditOutlined className="mr-2" />
+                  Edit Asset
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
+      </Drawer>
+
+      {/* Edit Asset Modal */}
+      <Drawer
+        title="Edit Asset/Equipment"
+        placement="right"
+        width={typeof window !== 'undefined' && window.innerWidth < 640 ? '100%' : 600}
+        open={showEditModal}
+        onClose={() => {
+          setShowEditModal(false);
+          setEditingAsset(null);
+          editForm.resetFields();
+        }}
+      >
+        <Form
+          form={editForm}
+          layout="vertical"
+          onFinish={updateAsset}
+        >
+          <Form.Item
+            label="Asset / Equipment Name"
+            name="asset_name"
+            rules={[{ required: true, message: 'Please enter asset name' }]}
+          >
+            <Input placeholder="Enter asset/equipment name" size="large" />
+          </Form.Item>
+
+          <Form.Item
+            label="Asset Category"
+            name="asset_category"
+            rules={[{ required: true, message: 'Please select a category' }]}
+          >
+            <Select
+              placeholder="Select category"
+              size="large"
+              options={assetCategories}
+            />
+          </Form.Item>
+
+          <Form.Item
+            noStyle
+            shouldUpdate={(prevValues, currentValues) =>
+              prevValues.asset_category !== currentValues.asset_category
+            }
+          >
+            {({ getFieldValue }) =>
+              getFieldValue('asset_category') === 'others' ? (
+                <Form.Item
+                  label="Specify Category"
+                  name="other_specify"
+                  rules={[{ required: true, message: 'Please specify the category' }]}
+                >
+                  <Input placeholder="Enter category" size="large" />
+                </Form.Item>
+              ) : null
+            }
+          </Form.Item>
+
+          <Form.Item
+            label="Quantity"
+            name="quantity"
+            rules={[
+              { required: true, message: 'Please enter quantity' },
+              { type: 'number', min: 1, message: 'Quantity must be at least 1' },
+            ]}
+          >
+            <InputNumber
+              placeholder="Enter quantity"
+              size="large"
+              style={{ width: '100%' }}
+              min={1}
+            />
+          </Form.Item>
+
+          <Form.Item
+            label="Condition"
+            name="condition"
+            rules={[{ required: true, message: 'Please select condition' }]}
+          >
+            <Select
+              placeholder="Select condition"
+              size="large"
+              options={[
+                { value: 'new', label: 'New' },
+                { value: 'good', label: 'Good' },
+                { value: 'fair', label: 'Fair' },
+                { value: 'poor', label: 'Poor' },
+              ]}
+            />
+          </Form.Item>
+
+          <Form.Item className="mt-6">
+            <Space>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setShowEditModal(false);
+                  setEditingAsset(null);
+                  editForm.resetFields();
+                }}
+                disabled={updating}
+              >
+                Cancel
+              </Button>
+              <Button 
+                type="submit"
+                disabled={updating}
+              >
+                {updating ? (
+                  <>
+                    <Spin indicator={<LoadingOutlined style={{ fontSize: 16 }} spin />} className="mr-2" />
+                    Updating...
+                  </>
+                ) : (
+                  'Update Asset'
+                )}
               </Button>
             </Space>
           </Form.Item>

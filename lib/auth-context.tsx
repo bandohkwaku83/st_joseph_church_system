@@ -75,6 +75,7 @@ interface AuthContextType {
   getRoles: () => Role[];
   getUsers: () => UserSummary[];
   getStoredUser: (id: string) => StoredUser | undefined;
+  getBackendUser: (id: string) => BackendUser | undefined;
   addRole: (role: Role) => void;
   updateRole: (role: Role) => void;
   deleteRole: (id: string) => boolean;
@@ -379,6 +380,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             user: BackendUser;
             message?: string;
             status?: string;
+            expiresAt?: string;
           }>('login', {
             method: 'POST',
             body: JSON.stringify({
@@ -614,6 +616,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [backendUsers, roles]
   );
 
+  const getBackendUser = useCallback(
+    (id: string): BackendUser | undefined => {
+      return backendUsers.find((x) => String(x.id) === id);
+    },
+    [backendUsers]
+  );
+
   const addRole = useCallback((role: Role) => {
     const next = loadRoles();
     if (next.some((r) => r.id === role.id)) return;
@@ -764,6 +773,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         getRoles,
         getUsers,
         getStoredUser,
+        getBackendUser,
         addRole,
         updateRole,
         deleteRole,
