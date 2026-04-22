@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   HiArrowUp,
   HiArrowDown,
@@ -20,6 +20,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
+import { useToast } from '@/lib/toast-context';
+import { apiRequest, getApiBase } from '@/lib/api';
 
 /** Monthly welfare/dues payment (aligned with Welfare/Dues page) */
 interface DuesPayment {
@@ -79,10 +81,181 @@ const ADMIN_RECENT_ACTIVITY = [
 
 export default function Dashboard() {
   const { user, hasRole } = useAuth();
+  const { showToast } = useToast();
   const isAdmin = hasRole('church_admin');
   const isFinanceOfficer = hasRole('finance_officer');
 
-  // Sample welfare/dues ledger (mirrors Welfare/Dues — GHC 50 target per member per month)
+  // API data state
+  const [members, setMembers] = useState<any[]>([]);
+  const [organizations, setOrganizations] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Fetch members from API
+  const fetchMembers = useCallback(async () => {
+    try {
+      const token = localStorage.getItem('auth_token');
+      if (!token) {
+        console.warn('No auth token found, skipping members fetch');
+        return;
+      }
+
+      console.log('Fetching members from API...');
+      const response = await apiRequest<{ members: any[] }>('members', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      console.log('Members API response:', response);
+
+      if (response.data && response.data.members && Array.isArray(response.data.members)) {
+        console.log('Successfully loaded', response.data.members.length, 'members');
+        setMembers(response.data.members);
+      } else if (response.error) {
+        console.error('Error fetching members:', response.error.message);
+        setError(`Failed to load members: ${response.error.message}`);
+      } else {
+        console.warn('Unexpected members API response format:', response);
+        setError('Unexpected response format from members API');
+      }
+    } catch (error) {
+      console.error('Error fetching members:', error);
+      setError('Network error occurred while fetching members');
+    }
+  }, []);
+
+  // Fetch organizations from API
+  const fetchOrganizations = useCallback(async () => {
+    try {
+      const token = localStorage.getItem('auth_token');
+      if (!token) {
+        console.warn('No auth token found, skipping organizations fetch');
+        return;
+      }
+
+      console.log('Fetching organizations from API...');
+      const response = await apiRequest<{ organisations: any[] }>('organisations', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      console.log('Organizations API response:', response);
+
+      if (response.data && response.data.organisations && Array.isArray(response.data.organisations)) {
+        console.log('Successfully loaded', response.data.organisations.length, 'organizations');
+        setOrganizations(response.data.organisations);
+      } else if (response.error) {
+        console.error('Error fetching organizations:', response.error.message);
+        setError(`Failed to load organizations: ${response.error.message}`);
+      } else {
+        console.warn('Unexpected organizations API response format:', response);
+        setError('Unexpected response format from organizations API');
+      }
+    } catch (error) {
+      console.error('Error fetching organizations:', error);
+      setError('Network error occurred while fetching organizations');
+    }
+  }, []);
+
+  // Fetch data on component mount
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true);
+      await Promise.all([fetchMembers(), fetchOrganizations()]);
+      setLoading(false);
+    };
+    fetchData();
+  }, [fetchMembers, fetchOrganizations]);
+
+  // Calculate member statistics from API data
+  const memberStats = useMemo(() => {
+    if (loading) {
+      return {
+        total: 0,
+        active: 0,
+        newThisMonth: 0,
+        growth: 0,
+        loading: true,
+      };
+    }
+
+    if (error || members.length === 0) {
+      // Fallback to hardcoded values when API is not available
+      return {
+        total: 450,
+        active: 380,
+        newThisMonth: 12,
+        growth: 2.5,
+        loading: false,
+        fallback: true,
+      };
+    }
+
+    const total = members.length;
+    const active = members.filter(member => member.status === 'active' || !member.status).length; // Assume active if no status field
+    
+    // Calculate new members this month
+    const now = new Date();
+    const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const newThisMonth = members.filter(member => {
+      if (!member.inserted_at) return false;
+      return member.inserted_at.startsWith(currentMonth);
+    }).length;
+
+    // Calculate growth (simplified - could be improved with historical data)
+    const growth = total > 0 ? ((newThisMonth / total) * 100) : 0;
+
+    return {
+      total,
+      active,
+      newThisMonth,
+      growth: parseFloat(growth.toFixed(1)),
+      loading: false,
+      fallback: false,
+    };
+  }, [members, loading, error]);
+
+  // Calculate organization statistics from API data
+  const organizationStats = useMemo(() => {
+    if (loading) {
+      return {
+        total: 0,
+        activeLeaders: 0,
+        totalMembers: 0,
+        loading: true,
+      };
+    }
+
+    if (error || organizations.length === 0) {
+      // Fallback to hardcoded values when API is not available
+      return {
+        total: 11,
+        activeLeaders: 16,
+        totalMembers: 450,
+        loading: false,
+        fallback: true,
+      };
+    }
+
+    const total = organizations.length;
+    const activeLeaders = organizations.reduce((count, org) => {
+      return count + (org.leader_id ? 1 : 0);
+    }, 0);
+    
+    const totalMembers = organizations.reduce((count, org) => {
+      return count + (org.members ? org.members.length : 0);
+    }, 0);
+
+    return {
+      total,
+      activeLeaders,
+      totalMembers,
+      loading: false,
+      fallback: false,
+    };
+  }, [organizations, loading, error]);
   const [duesPayments] = useState<DuesPayment[]>([
     { id: '1', date: '2026-04-14', memberName: 'Kwame Asante', amount: 50, method: 'Cash' },
     { id: '2', date: '2026-04-13', memberName: 'Ama Mensah', amount: 50, method: 'Mobile Money' },
@@ -158,24 +331,24 @@ export default function Dashboard() {
   const executiveStats = useMemo(
     () => ({
       members: {
-        total: 450,
-        active: 380,
-        newThisMonth: 12,
-        growth: 2.5,
+        total: memberStats.total,
+        active: memberStats.active,
+        newThisMonth: memberStats.newThisMonth,
+        growth: memberStats.growth,
       },
       attendance: {
-        totalThisMonth: 2840,
+        totalThisMonth: 2840, // Keep hardcoded for now as attendance API not integrated yet
         averagePerService: 142,
         servicesThisMonth: 20,
         growth: 5.2,
       },
       dues: duesMonthStats,
       organizations: {
-        total: 11,
-        activeLeaders: 16,
+        total: organizationStats.total,
+        activeLeaders: organizationStats.activeLeaders,
       },
     }),
-    [duesMonthStats]
+    [memberStats, organizationStats, duesMonthStats]
   );
 
   const headPastorRecentActivity = useMemo(
@@ -257,32 +430,11 @@ export default function Dashboard() {
 
   // Admin Dashboard
   if (isAdmin) {
-    const membersData = {
-      total: 450,
-      active: 380,
-      newThisMonth: 12,
-      growth: 2.5,
-    };
-
-    const attendanceData = {
-      totalThisMonth: 2840,
-      averagePerService: 142,
-      servicesThisMonth: 20,
-      growth: 5.2,
-    };
-
-    const organizationsData = {
-      totalOrganizations: 11,
-      totalClasses: 5,
-      totalMembers: 450,
-      activeLeaders: 16,
-    };
-
     const adminStats = [
       {
         title: 'Total Members',
-        value: membersData.total.toLocaleString(),
-        change: `+${membersData.growth}%`,
+        value: memberStats.total.toLocaleString(),
+        change: memberStats.fallback ? 'Using fallback data' : `+${memberStats.growth}%`,
         trend: 'up' as const,
         icon: HiOutlineUsers,
         color: 'text-blue-600',
@@ -291,8 +443,8 @@ export default function Dashboard() {
       },
       {
         title: 'Monthly Attendance',
-        value: attendanceData.totalThisMonth.toLocaleString(),
-        change: `+${attendanceData.growth}%`,
+        value: '2,840', // Keep hardcoded for now as attendance API not integrated yet
+        change: '+5.2%',
         trend: 'up' as const,
         icon: HiOutlineClipboardCheck,
         color: 'text-green-600',
@@ -301,8 +453,8 @@ export default function Dashboard() {
       },
       {
         title: 'Organizations',
-        value: organizationsData.totalOrganizations.toString(),
-        change: `${organizationsData.totalClasses} Classes`,
+        value: organizationStats.total.toString(),
+        change: organizationStats.fallback ? 'Using fallback data' : `${organizationStats.activeLeaders} Leaders`,
         trend: 'neutral' as const,
         icon: HiOutlineOfficeBuilding,
         color: 'text-purple-600',
@@ -310,6 +462,9 @@ export default function Dashboard() {
         href: '/dashboard/departments',
       },
     ];
+
+    // Show error message if API calls failed
+    const showApiError = error && !loading;
 
     return (
       <div className="space-y-6">
@@ -321,6 +476,28 @@ export default function Dashboard() {
             Here is an overview of parish administration for St. Joseph Catholic Church
           </p>
         </div>
+
+        {/* API Error Alert */}
+        {showApiError && (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+            <div className="flex">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <h3 className="text-sm font-medium text-yellow-800">
+                  API Connection Issue
+                </h3>
+                <div className="mt-2 text-sm text-yellow-700">
+                  <p>Unable to load data from the backend API. Using fallback data for display. Error: {error}</p>
+                  <p className="mt-1">Please check that the backend server is running at {getApiBase()}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
           {adminStats.map((stat, index) => {
@@ -381,15 +558,15 @@ export default function Dashboard() {
                 <div className="grid grid-cols-3 gap-2 sm:gap-4">
                   <div>
                     <p className="text-xs text-gray-600 mb-1">Total Members</p>
-                    <p className="text-xl sm:text-2xl font-semibold text-gray-900">{membersData.total}</p>
+                    <p className="text-xl sm:text-2xl font-semibold text-gray-900">{memberStats.total}</p>
                   </div>
                   <div>
                     <p className="text-xs text-gray-600 mb-1">Active Members</p>
-                    <p className="text-xl sm:text-2xl font-semibold text-blue-600">{membersData.active}</p>
+                    <p className="text-xl sm:text-2xl font-semibold text-blue-600">{memberStats.active}</p>
                   </div>
                   <div>
                     <p className="text-xs text-gray-600 mb-1">New This Month</p>
-                    <p className="text-xl sm:text-2xl font-semibold text-green-600">+{membersData.newThisMonth}</p>
+                    <p className="text-xl sm:text-2xl font-semibold text-green-600">+{memberStats.newThisMonth}</p>
                   </div>
                 </div>
                 <Link href="/dashboard/members">
@@ -774,6 +951,9 @@ export default function Dashboard() {
     },
     ];
 
+    // Show error message if API calls failed
+    const showApiError = error && !loading;
+
     return (
     <div className="space-y-6">
       {/* Welcome Header */}
@@ -785,6 +965,28 @@ export default function Dashboard() {
           Executive overview for St. Joseph Catholic Church — parish operations and key metrics
         </p>
       </div>
+
+      {/* API Error Alert */}
+      {showApiError && (
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+          <div className="flex">
+            <div className="flex-shrink-0">
+              <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-yellow-800">
+                API Connection Issue
+              </h3>
+              <div className="mt-2 text-sm text-yellow-700">
+                <p>Unable to load data from the backend API. Using fallback data for display. Error: {error}</p>
+                <p className="mt-1">Please check that the backend server is running at {getApiBase()}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Executive Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">

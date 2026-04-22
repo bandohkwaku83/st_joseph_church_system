@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   HiOutlineChatAlt,
   HiOutlinePhone,
@@ -14,9 +14,12 @@ import {
 } from 'react-icons/hi';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Table, Tag, Form, Select, DatePicker, TimePicker, Space, Input, message as antMessage, Drawer } from 'antd';
+import { Table, Tag, Form, Select, DatePicker, TimePicker, Space, Input, Drawer } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { SearchOutlined, FilterOutlined, DownloadOutlined, EyeOutlined, SendOutlined } from '@ant-design/icons';
+import { useAuth } from '@/lib/auth-context';
+import { useToast } from '@/lib/toast-context';
+import { apiRequest } from '@/lib/api';
 
 interface SMSMessage {
   id: number;
@@ -28,6 +31,17 @@ interface SMSMessage {
   status: 'sent' | 'delivered' | 'failed' | 'pending';
   characterCount: number;
   cost?: number;
+  memberId?: number;
+}
+
+// Backend SMS interface to match API response
+interface BackendSMS {
+  id: number;
+  message: string;
+  status: string;
+  inserted_at: string;
+  updated_at: string;
+  member_id: number;
 }
 
 interface ScheduledMessage {
@@ -40,67 +54,175 @@ interface ScheduledMessage {
 }
 
 export default function CommunicationPage() {
+  const { hasPermission, isSuperAdmin } = useAuth();
+  const { showToast } = useToast();
   const [showSendModal, setShowSendModal] = useState(false);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [sendingMessage, setSendingMessage] = useState(false);
+  const [schedulingMessage, setSchedulingMessage] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [form] = Form.useForm();
   const [scheduleForm] = Form.useForm();
+  
+  // API integration state
+  const [messages, setMessages] = useState<SMSMessage[]>([]);
+  const [members, setMembers] = useState<any[]>([]);
+  const [organizations, setOrganizations] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // Sample data - Replace with actual data from your API
-  const recentMessages: SMSMessage[] = [
-    {
-      id: 1,
-      recipient: 'All Members',
-      recipientType: 'all',
-      message: 'Sunday Service Reminder: Join us this Sunday at 9:00 AM. God bless!',
-      sentAt: '2024-01-14 08:00',
-      status: 'delivered',
-      characterCount: 78,
-      cost: 0.05,
-    },
-    {
-      id: 2,
-      recipient: 'Choir Members',
-      recipientType: 'group',
-      message: 'Rehearsal scheduled for Friday at 7:00 PM. Please confirm attendance.',
-      sentAt: '2024-01-13 14:30',
-      status: 'sent',
-      characterCount: 85,
-      cost: 0.12,
-    },
-    {
-      id: 3,
-      recipient: 'John Doe',
+  // Convert backend SMS to frontend format
+  const mapBackendSMS = useCallback((backendSMS: BackendSMS): SMSMessage => {
+    // Find member name from members array
+    const member = members.find(m => m.id === backendSMS.member_id);
+    const memberName = member ? `${member.first_name} ${member.last_name}` : `Member ${backendSMS.member_id}`;
+    
+    return {
+      id: backendSMS.id,
+      recipient: memberName,
       recipientType: 'individual',
-      phoneNumber: '+1 234-567-8900',
-      message: 'Happy Birthday! May God continue to bless you abundantly.',
-      sentAt: '2024-01-12 09:00',
-      status: 'delivered',
-      characterCount: 62,
-      cost: 0.05,
-    },
-    {
-      id: 4,
-      recipient: 'Youth Group',
-      recipientType: 'group',
-      message: 'Youth meeting this Saturday at 3:00 PM. Bring your friends!',
-      sentAt: '2024-01-10 10:00',
-      status: 'delivered',
-      characterCount: 68,
-      cost: 0.15,
-    },
-    {
-      id: 5,
-      recipient: 'Sarah Williams',
-      recipientType: 'individual',
-      phoneNumber: '+1 234-567-8903',
-      message: 'Thank you for your generous contribution. God bless you!',
-      sentAt: '2024-01-09 15:20',
-      status: 'failed',
-      characterCount: 65,
-      cost: 0.05,
-    },
-  ];
+      phoneNumber: member?.phone_number || undefined,
+      message: backendSMS.message,
+      sentAt: backendSMS.inserted_at,
+      status: backendSMS.status as 'sent' | 'delivered' | 'failed' | 'pending',
+      characterCount: backendSMS.message.length,
+      cost: 0.05, // Default cost - could be calculated based on message length
+      memberId: backendSMS.member_id,
+    };
+  }, [members]);
+
+  // Fetch members from API
+  const fetchMembers = useCallback(async () => {
+    try {
+      const token = localStorage.getItem('auth_token');
+      if (!token) {
+        return;
+      }
+
+      const response = await apiRequest<{ members: any[] }>('members', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (response.data && response.data.members && Array.isArray(response.data.members)) {
+        setMembers(response.data.members);
+      } else if (response.error) {
+        console.error('Error fetching members:', response.error.message);
+      }
+    } catch (error) {
+      console.error('Error fetching members:', error);
+    }
+  }, []);
+
+  // Fetch organizations from API
+  const fetchOrganizations = useCallback(async () => {
+    try {
+      const token = localStorage.getItem('auth_token');
+      if (!token) {
+        return;
+      }
+
+      const response = await apiRequest<{ organisations: any[] }>('organisations', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (response.data && response.data.organisations && Array.isArray(response.data.organisations)) {
+        setOrganizations(response.data.organisations);
+      } else if (response.error) {
+        console.error('Error fetching organizations:', response.error.message);
+      }
+    } catch (error) {
+      console.error('Error fetching organizations:', error);
+    }
+  }, []);
+
+  // Fetch SMS messages from API
+  const fetchSMSMessages = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const token = localStorage.getItem('auth_token');
+      if (!token) {
+        setError('No authentication token found');
+        return;
+      }
+
+      const response = await apiRequest<{ data: BackendSMS[] }>('sms_messages', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (response.data && response.data.data && Array.isArray(response.data.data)) {
+        const mappedMessages = response.data.data.map(mapBackendSMS);
+        setMessages(mappedMessages);
+        showToast('SMS messages loaded successfully', 'success');
+      } else if (response.error) {
+        setError(response.error.message || 'Failed to fetch SMS messages');
+        showToast('Failed to load SMS messages', 'error');
+      } else {
+        setMessages([]);
+        showToast('No SMS messages found', 'info');
+      }
+    } catch (error) {
+      console.error('Error fetching SMS messages:', error);
+      setError('Network error occurred while fetching SMS messages');
+      showToast('Network error occurred', 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, [mapBackendSMS, showToast]);
+
+  // Fetch data on component mount
+  useEffect(() => {
+    const fetchData = async () => {
+      await Promise.all([fetchMembers(), fetchOrganizations()]);
+    };
+    fetchData();
+  }, [fetchMembers, fetchOrganizations]);
+
+  // Fetch SMS messages when members are loaded
+  useEffect(() => {
+    if (members.length > 0) {
+      const fetchInitialSMSMessages = async () => {
+        try {
+          setLoading(true);
+          setError(null);
+
+          const token = localStorage.getItem('auth_token');
+          if (!token) {
+            setError('No authentication token found');
+            return;
+          }
+
+          const response = await apiRequest<{ data: BackendSMS[] }>('sms_messages', {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+            },
+          });
+
+          if (response.data && response.data.data && Array.isArray(response.data.data)) {
+            const mappedMessages = response.data.data.map(mapBackendSMS);
+            setMessages(mappedMessages);
+          } else if (response.error) {
+            setError(response.error.message || 'Failed to fetch SMS messages');
+          } else {
+            setMessages([]);
+          }
+        } catch (error) {
+          console.error('Error fetching SMS messages:', error);
+          setError('Network error occurred while fetching SMS messages');
+        } finally {
+          setLoading(false);
+        }
+      };
+      fetchInitialSMSMessages();
+    }
+  }, [members, mapBackendSMS]);
 
   const scheduledMessages: ScheduledMessage[] = [
     {
@@ -121,18 +243,22 @@ export default function CommunicationPage() {
     },
   ];
 
-  const filteredMessages = recentMessages.filter(
+  const filteredMessages = messages.filter(
     (msg) =>
       msg.recipient.toLowerCase().includes(searchTerm.toLowerCase()) ||
       msg.message.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // Calculate stats
-  const totalSent = recentMessages.length;
-  const delivered = recentMessages.filter((m) => m.status === 'delivered').length;
-  const failed = recentMessages.filter((m) => m.status === 'failed').length;
+  // Calculate stats from API data
+  const totalSent = loading ? 0 : messages.length;
+  const delivered = loading ? 0 : messages.filter((m) => m.status === 'delivered').length;
+  const failed = loading ? 0 : messages.filter((m) => m.status === 'failed').length;
   const scheduled = scheduledMessages.filter((m) => m.status === 'scheduled').length;
-  const totalCost = recentMessages.reduce((sum, m) => sum + (m.cost || 0), 0);
+  const totalCost = loading ? 0 : messages.reduce((sum, m) => sum + (m.cost || 0), 0);
+  
+  // Calculate percentages safely
+  const deliveredPercentage = totalSent > 0 ? ((delivered / totalSent) * 100).toFixed(1) : '0.0';
+  const failedPercentage = totalSent > 0 ? ((failed / totalSent) * 100).toFixed(1) : '0.0';
 
   // Pattern SVG definitions (matching dashboard style)
   const patternStyles = [
@@ -154,62 +280,236 @@ export default function CommunicationPage() {
   ];
 
   const stats = [
-    { label: 'Total SMS Sent', value: totalSent.toLocaleString(), icon: HiOutlineChatAlt, trend: '+12%', trendUp: true },
-    { label: 'Delivered', value: delivered.toLocaleString(), icon: HiOutlineCheckCircle, trend: `${((delivered / totalSent) * 100).toFixed(1)}%`, trendUp: true },
-    { label: 'Failed', value: failed.toLocaleString(), icon: HiOutlineXCircle, trend: `${((failed / totalSent) * 100).toFixed(1)}%`, trendUp: false },
+    { label: 'Total SMS Sent', value: loading ? 'Loading...' : totalSent.toLocaleString(), icon: HiOutlineChatAlt, trend: '+12%', trendUp: true },
+    { label: 'Delivered', value: loading ? 'Loading...' : delivered.toLocaleString(), icon: HiOutlineCheckCircle, trend: `${deliveredPercentage}%`, trendUp: true },
+    { label: 'Failed', value: loading ? 'Loading...' : failed.toLocaleString(), icon: HiOutlineXCircle, trend: `${failedPercentage}%`, trendUp: false },
     { label: 'Scheduled', value: scheduled.toLocaleString(), icon: HiOutlineClock, trend: 'Active', trendUp: null },
-    { label: 'Total Cost', value: `$${totalCost.toFixed(2)}`, icon: HiOutlinePhone, trend: 'This month', trendUp: null },
+    { label: 'Total Cost', value: loading ? 'Loading...' : `$${totalCost.toFixed(2)}`, icon: HiOutlinePhone, trend: 'This month', trendUp: null },
   ];
 
   // Handle SMS sending
   const handleSendSMS = async (values: any) => {
     try {
-      // TODO: Integrate with your third-party SMS service here
-      // Example structure:
-      // const response = await fetch('/api/sms/send', {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify({
-      //     recipients: values.recipients,
-      //     message: values.message,
-      //     recipientType: values.recipientType,
-      //   }),
-      // });
-      // const result = await response.json();
+      setSendingMessage(true);
+      
+      const token = localStorage.getItem('auth_token');
+      if (!token) {
+        showToast('Authentication required', 'error');
+        return;
+      }
 
-      console.log('Sending SMS:', values);
-      antMessage.success('SMS sent successfully!');
+      // Prepare the payload based on recipient type
+      let payload: any = {
+        member_ids: [],
+        message: values.message
+      };
+
+      // Handle different recipient types
+      if (values.recipientType === 'individual') {
+        // For individual messages, use single SMS endpoint with member_id (not array)
+        payload = {
+          member_id: parseInt(values.recipients),
+          message: values.message
+        };
+      } else if (values.recipientType === 'group') {
+        // For group messages, use bulk endpoint with member_ids array
+        const organizationId = parseInt(values.recipients);
+        const selectedOrganization = organizations.find(org => org.id === organizationId);
+        
+        if (!selectedOrganization) {
+          throw new Error('Selected organization not found');
+        }
+        
+        if (!selectedOrganization.members || selectedOrganization.members.length === 0) {
+          throw new Error(`No members found in "${selectedOrganization.name}". Please add members to this organization first.`);
+        }
+        
+        // Extract member IDs from the organization's members array
+        payload.member_ids = selectedOrganization.members.map((member: any) => member.member_id);
+        
+        console.log(`Sending group SMS to "${selectedOrganization.name}" - ${payload.member_ids.length} members:`, payload.member_ids);
+      } else if (values.recipientType === 'all') {
+        // For all members, use bulk endpoint with all member IDs
+        payload.member_ids = members.map(member => member.id);
+        
+        if (payload.member_ids.length === 0) {
+          throw new Error('No members found to send SMS to');
+        }
+      }
+
+      // Determine the correct endpoint based on recipient type
+      let endpoint = 'sms_messages';
+      
+      if (values.recipientType === 'group' || values.recipientType === 'all') {
+        // Use bulk endpoint for group and all members
+        endpoint = 'sms_messages/bulk';
+      } else if (values.recipientType === 'individual') {
+        // Use single endpoint for individual messages
+        endpoint = 'sms_messages';
+      }
+
+      console.log('Using endpoint:', endpoint);
+      console.log('Auth token exists:', !!token);
+      console.log('Token length:', token.length);
+      console.log('SMS Payload being sent:', JSON.stringify(payload, null, 2));
+
+      const requestOptions = {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      };
+
+      console.log('Request headers:', requestOptions.headers);
+      console.log('Request body:', requestOptions.body);
+
+      const response = await apiRequest(endpoint, requestOptions);
+
+      console.log('SMS API Response:', response);
+      console.log('Raw response data:', response.data);
+      console.log('Raw response error:', response.error);
+
+      if (response.error) {
+        console.error('SMS API Error Details:', {
+          error: response.error,
+          status: response.status,
+          data: response.data
+        });
+        
+        // Try to provide more specific error messages
+        let errorMessage = response.error.message || `Failed to send SMS (Status: ${response.status})`;
+        
+        if (response.status === 400) {
+          errorMessage = `Invalid request: ${response.error.message || 'Please check your message and recipient selection'}`;
+        } else if (response.status === 401) {
+          errorMessage = 'Authentication failed. Please log in again.';
+        } else if (response.status === 403) {
+          errorMessage = 'You do not have permission to send SMS messages.';
+        } else if (response.status === 500) {
+          errorMessage = 'Server error occurred. Please try again later.';
+        }
+        
+        throw new Error(errorMessage);
+      }
+
+      showToast('SMS sent successfully!', 'success');
       form.resetFields();
       setShowSendModal(false);
+      
+      // Refresh SMS messages to show the newly sent message
+      await fetchSMSMessages();
     } catch (error) {
       console.error('Error sending SMS:', error);
-      antMessage.error('Failed to send SMS. Please try again.');
+      showToast(error instanceof Error ? error.message : 'Failed to send SMS. Please try again.', 'error');
+    } finally {
+      setSendingMessage(false);
     }
   };
 
   // Handle scheduled SMS
   const handleScheduleSMS = async (values: any) => {
     try {
-      // TODO: Integrate with your third-party SMS service for scheduling
-      // Example structure:
-      // const response = await fetch('/api/sms/schedule', {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify({
-      //     recipients: values.recipients,
-      //     message: values.message,
-      //     scheduledDate: values.scheduledDate,
-      //     scheduledTime: values.scheduledTime,
-      //   }),
-      // });
+      setSchedulingMessage(true);
+      
+      const token = localStorage.getItem('auth_token');
+      if (!token) {
+        showToast('Authentication required', 'error');
+        return;
+      }
 
-      console.log('Scheduling SMS:', values);
-      antMessage.success('SMS scheduled successfully!');
+      // Prepare the payload based on recipient type
+      let payload: any = {
+        member_ids: [],
+        message: values.message,
+        schedule_time: ''
+      };
+
+      // Combine date and time into the required format: "2024-04-22 10:00:00"
+      const scheduledDate = values.scheduledDate.format('YYYY-MM-DD');
+      const scheduledTime = values.scheduledTime.format('HH:mm:ss');
+      payload.schedule_time = `${scheduledDate} ${scheduledTime}`;
+
+      // Handle different recipient types (same logic as send SMS)
+      if (values.recipientType === 'individual') {
+        // For individual messages
+        payload.member_ids = [parseInt(values.recipients)];
+      } else if (values.recipientType === 'group') {
+        // For group messages, get members from the selected organization
+        const organizationId = parseInt(values.recipients);
+        const selectedOrganization = organizations.find(org => org.id === organizationId);
+        
+        if (!selectedOrganization) {
+          throw new Error('Selected organization not found');
+        }
+        
+        if (!selectedOrganization.members || selectedOrganization.members.length === 0) {
+          throw new Error(`No members found in "${selectedOrganization.name}". Please add members to this organization first.`);
+        }
+        
+        // Extract member IDs from the organization's members array
+        payload.member_ids = selectedOrganization.members.map((member: any) => member.member_id);
+        
+        console.log(`Scheduling group SMS to "${selectedOrganization.name}" - ${payload.member_ids.length} members:`, payload.member_ids);
+      } else if (values.recipientType === 'all') {
+        // For all members
+        payload.member_ids = members.map(member => member.id);
+        
+        if (payload.member_ids.length === 0) {
+          throw new Error('No members found to schedule SMS to');
+        }
+      }
+
+      console.log('Schedule SMS Payload being sent:', JSON.stringify(payload, null, 2));
+
+      const requestOptions = {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      };
+
+      const response = await apiRequest('sms_messages/schedule', requestOptions);
+
+      console.log('Schedule SMS API Response:', response);
+
+      if (response.error) {
+        console.error('Schedule SMS API Error Details:', {
+          error: response.error,
+          status: response.status,
+          data: response.data
+        });
+        
+        // Try to provide more specific error messages
+        let errorMessage = response.error.message || `Failed to schedule SMS (Status: ${response.status})`;
+        
+        if (response.status === 400) {
+          errorMessage = `Invalid request: ${response.error.message || 'Please check your message, recipients, and schedule time'}`;
+        } else if (response.status === 401) {
+          errorMessage = 'Authentication failed. Please log in again.';
+        } else if (response.status === 403) {
+          errorMessage = 'You do not have permission to schedule SMS messages.';
+        } else if (response.status === 500) {
+          errorMessage = 'Server error occurred. Please try again later.';
+        }
+        
+        throw new Error(errorMessage);
+      }
+
+      showToast('SMS scheduled successfully!', 'success');
       scheduleForm.resetFields();
       setShowScheduleModal(false);
+      
+      // Optionally refresh SMS messages to show scheduled messages
+      // await fetchSMSMessages();
     } catch (error) {
       console.error('Error scheduling SMS:', error);
-      antMessage.error('Failed to schedule SMS. Please try again.');
+      showToast(error instanceof Error ? error.message : 'Failed to schedule SMS. Please try again.', 'error');
+    } finally {
+      setSchedulingMessage(false);
     }
   };
 
@@ -444,28 +744,42 @@ export default function CommunicationPage() {
                 onChange={(e) => setSearchTerm(e.target.value)}
                 style={{ width: 250 }}
               />
+              <Button variant="outline" size="sm" onClick={fetchSMSMessages} disabled={loading}>
+                {loading ? 'Loading...' : 'Refresh'}
+              </Button>
               <Button variant="outline" size="sm">
                 <FilterOutlined className="mr-2" />
-              Filter
+                Filter
               </Button>
               <Button variant="outline" size="sm">
                 <DownloadOutlined className="mr-2" />
-              Export
+                Export
               </Button>
             </Space>
           </div>
         </CardHeader>
         <CardContent className="relative z-10">
-          <Table
-            columns={columns}
-            dataSource={filteredMessages}
-            rowKey="id"
-            pagination={{
-              pageSize: 10,
-              showSizeChanger: true,
-              showTotal: (total) => `Total ${total} messages`,
-            }}
-          />
+          {error ? (
+            <div className="text-center py-8">
+              <HiOutlineExclamationCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+              <p className="text-red-600 mb-4">{error}</p>
+              <Button onClick={fetchSMSMessages} variant="outline">
+                Try Again
+              </Button>
+            </div>
+          ) : (
+            <Table
+              columns={columns}
+              dataSource={filteredMessages}
+              rowKey="id"
+              loading={loading}
+              pagination={{
+                pageSize: 10,
+                showSizeChanger: true,
+                showTotal: (total) => `Total ${total} messages`,
+              }}
+            />
+          )}
         </CardContent>
       </Card>
 
@@ -525,6 +839,7 @@ export default function CommunicationPage() {
               recipientType: 'all',
             }}
           >
+            {/* Send SMS Form */}
             <Form.Item
               label="Recipient Type"
               name="recipientType"
@@ -551,12 +866,11 @@ export default function CommunicationPage() {
                       rules={[{ required: true, message: 'Please select a group' }]}
                     >
                       <Select size="large" placeholder="Select group">
-                        <Select.Option value="choir">Choir</Select.Option>
-                        <Select.Option value="ushers">Ushers</Select.Option>
-                        <Select.Option value="youth">Youth</Select.Option>
-                        <Select.Option value="mens-fellowship">Men's Fellowship</Select.Option>
-                        <Select.Option value="womens-fellowship">Women's Fellowship</Select.Option>
-                        <Select.Option value="children">Children's Ministry</Select.Option>
+                        {organizations.map(org => (
+                          <Select.Option key={org.id} value={org.id.toString()}>
+                            {org.name}
+                          </Select.Option>
+                        ))}
                       </Select>
                     </Form.Item>
                   );
@@ -575,11 +889,10 @@ export default function CommunicationPage() {
                         filterOption={(input, option) =>
                           (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
                         }
-                        options={[
-                          { value: '1', label: 'John Doe (+1 234-567-8900)' },
-                          { value: '2', label: 'Jane Smith (+1 234-567-8901)' },
-                          { value: '3', label: 'Michael Johnson (+1 234-567-8902)' },
-                        ]}
+                        options={members.map(member => ({
+                          value: member.id.toString(),
+                          label: `${member.first_name} ${member.last_name} (${member.phone_number || 'No phone'})`
+                        }))}
                       />
                     </Form.Item>
                   );
@@ -613,12 +926,13 @@ export default function CommunicationPage() {
                   form.resetFields();
                 }}
                 className="flex-1"
+                disabled={sendingMessage}
               >
                 Cancel
               </Button>
-              <Button type="submit" className="flex-1">
+              <Button type="submit" className="flex-1" disabled={sendingMessage}>
                 <SendOutlined className="mr-2" />
-                Send SMS
+                {sendingMessage ? 'Sending...' : 'Send SMS'}
               </Button>
             </div>
           </Form>
@@ -645,6 +959,7 @@ export default function CommunicationPage() {
               recipientType: 'all',
             }}
           >
+            {/* Schedule SMS Form */}
             <Form.Item
               label="Recipient Type"
               name="recipientType"
@@ -671,12 +986,11 @@ export default function CommunicationPage() {
                       rules={[{ required: true, message: 'Please select a group' }]}
                     >
                       <Select size="large" placeholder="Select group">
-                        <Select.Option value="choir">Choir</Select.Option>
-                        <Select.Option value="ushers">Ushers</Select.Option>
-                        <Select.Option value="youth">Youth</Select.Option>
-                        <Select.Option value="mens-fellowship">Men's Fellowship</Select.Option>
-                        <Select.Option value="womens-fellowship">Women's Fellowship</Select.Option>
-                        <Select.Option value="children">Children's Ministry</Select.Option>
+                        {organizations.map(org => (
+                          <Select.Option key={org.id} value={org.id.toString()}>
+                            {org.name}
+                          </Select.Option>
+                        ))}
                       </Select>
                     </Form.Item>
                   );
@@ -692,11 +1006,10 @@ export default function CommunicationPage() {
                         size="large"
                         placeholder="Search and select member"
                         showSearch
-                        options={[
-                          { value: '1', label: 'John Doe (+1 234-567-8900)' },
-                          { value: '2', label: 'Jane Smith (+1 234-567-8901)' },
-                          { value: '3', label: 'Michael Johnson (+1 234-567-8902)' },
-                        ]}
+                        options={members.map(member => ({
+                          value: member.id.toString(),
+                          label: `${member.first_name} ${member.last_name} (${member.phone_number || 'No phone'})`
+                        }))}
                       />
                     </Form.Item>
                   );
@@ -740,19 +1053,20 @@ export default function CommunicationPage() {
 
             <div className="flex gap-3 pt-4 border-t border-gray-200">
               <Button
-                  type="button"
+                type="button"
                 variant="outline"
                 onClick={() => {
                   setShowScheduleModal(false);
                   scheduleForm.resetFields();
                 }}
                 className="flex-1"
+                disabled={schedulingMessage}
                 >
                   Cancel
               </Button>
-              <Button type="submit" className="flex-1">
+              <Button type="submit" className="flex-1" disabled={schedulingMessage}>
                 <HiOutlineCalendar className="mr-2 h-4 w-4" />
-                Schedule SMS
+                {schedulingMessage ? 'Scheduling...' : 'Schedule SMS'}
               </Button>
               </div>
           </Form>

@@ -9,7 +9,7 @@ import {
 } from 'react-icons/hi';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Table, Tag, Input, Select, Space, Button as AntButton, Steps, Form, DatePicker, Row, Col, Drawer, Upload, Radio, Checkbox } from 'antd';
+import { Table, Tag, Input, Select, Space, Button as AntButton, Steps, Form, DatePicker, Row, Col, Drawer, Upload, Radio } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import type { UploadFile, UploadProps } from 'antd';
 import { SearchOutlined, FilterOutlined, DownloadOutlined, EyeOutlined, EditOutlined, UploadOutlined, UserOutlined } from '@ant-design/icons';
@@ -312,13 +312,10 @@ export default function MembersPage() {
       otherNames: member.otherNames,
       gender: member.gender,
       dateOfBirth: member.dateOfBirth ? dayjs(member.dateOfBirth) : undefined,
-      age: member.age,
       maritalStatus: member.maritalStatus,
       nationality: member.nationality,
       hometown: member.hometown,
       region: member.region,
-      organisations: member.organisations || [],
-      otherOrganisation: member.otherOrganisation,
       occupation: member.occupation,
       placeOfWork: member.placeOfWork,
       skillsTalents: member.skillsTalents,
@@ -343,6 +340,18 @@ export default function MembersPage() {
       confirmationPlace: member.confirmationPlace,
     });
 
+    // Calculate and set age automatically from date of birth
+    if (member.dateOfBirth) {
+      const today = new Date();
+      const birthDate = new Date(member.dateOfBirth);
+      let age = today.getFullYear() - birthDate.getFullYear();
+      const monthDiff = today.getMonth() - birthDate.getMonth();
+      if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+        age--;
+      }
+      form.setFieldValue('age', age);
+    }
+
     // Set profile image preview if exists
     if (member.profileImage) {
       setProfileImagePreview(member.profileImage);
@@ -361,13 +370,11 @@ export default function MembersPage() {
 
   const filteredMembers = members.filter((member) => {
     const searchLower = searchTerm.toLowerCase();
-    const orgsMatch = member.organisations?.some(org => org.toLowerCase().includes(searchLower)) || false;
     return (
       member.name.toLowerCase().includes(searchLower) ||
       member.email.toLowerCase().includes(searchLower) ||
       member.department.toLowerCase().includes(searchLower) ||
-      member.churchNumber?.toLowerCase().includes(searchLower) ||
-      orgsMatch
+      member.churchNumber?.toLowerCase().includes(searchLower)
     );
   });
 
@@ -452,25 +459,6 @@ export default function MembersPage() {
           <div>
             <div className="text-xs text-gray-900 mb-1">{phone}</div>
             <div className="text-xs text-gray-600">{location}</div>
-          </div>
-        );
-      },
-    },
-    {
-      title: 'Organizations',
-      key: 'organisations',
-      render: (_, record: Member) => {
-        const orgs = record.organisations || [];
-        if (orgs.length === 0) {
-          return <Tag color="default">None</Tag>;
-        }
-        return (
-          <div className="flex flex-wrap gap-1">
-            {orgs.map((item, idx) => (
-              <Tag key={idx} color="blue">
-                {item}
-              </Tag>
-            ))}
           </div>
         );
       },
@@ -581,22 +569,6 @@ export default function MembersPage() {
             </div>
             <div className="flex flex-col sm:flex-row gap-2 sm:gap-2">
               <Select
-                defaultValue="All Organizations"
-                className="w-full sm:w-auto sm:flex-1"
-                size="large"
-                options={[
-                  { value: 'all', label: 'All Organizations' },
-                  { value: 'cma', label: 'Christian Mothers Association' },
-                  { value: 'ksji', label: 'Knights of St. John International (KSJI)' },
-                  { value: 'marshall', label: 'Knights and Ladies of Marshall' },
-                  { value: 'cyo', label: 'Catholic Youth Organization (CYO)' },
-                  { value: 'legion', label: 'Legion of Mary' },
-                  { value: 'choir', label: 'Choir' },
-                  { value: 'altar', label: 'Altar Servers' },
-                  { value: 'lectors', label: 'Lectors' },
-                ]}
-              />
-              <Select
                 defaultValue="All Status"
                 className="w-full sm:w-auto"
                 style={{ minWidth: 120 }}
@@ -703,7 +675,7 @@ export default function MembersPage() {
             current={currentStep}
             items={[
               { title: 'Personal Information' },
-              { title: 'Organisation & Details' },
+              { title: 'Occupation & Details' },
               { title: 'Contact & Membership' },
             ]}
             className="mb-8"
@@ -949,6 +921,31 @@ export default function MembersPage() {
                     </Form.Item>
                   </Col>
                 </Row>
+                <Form.Item
+                  label="Date of Birth"
+                  name="dateOfBirth"
+                  rules={[{ required: true, message: 'Please select date of birth' }]}
+                >
+                  <DatePicker 
+                    style={{ width: '100%' }} 
+                    size="large" 
+                    format="DD/MM/YYYY"
+                    onChange={(date) => {
+                      // Auto-calculate age when date of birth changes
+                      if (date) {
+                        const today = new Date();
+                        const birthDate = date.toDate();
+                        let age = today.getFullYear() - birthDate.getFullYear();
+                        const monthDiff = today.getMonth() - birthDate.getMonth();
+                        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+                          age--;
+                        }
+                        // Update the age field in the form (for internal use, not displayed)
+                        form.setFieldValue('age', age);
+                      }
+                    }}
+                  />
+                </Form.Item>
 
                 <Form.Item
                   label="Natal Group (Day Born)"
@@ -1191,53 +1188,9 @@ export default function MembersPage() {
                   </div>
                 </div>
               </div>
-            {/* Step 2: Organisation & Details */}
+            {/* Step 2: Occupation & Details */}
             <div style={{ display: currentStep === 1 ? 'block' : 'none' }} key="step-2" className="space-y-6">
                 <div>
-                  <h4 className="text-base font-semibold text-gray-900 mb-4">SOCIETY & ORGANISATION MEMBERSHIP</h4>
-                      <Form.Item
-                    label="Organisation(s) you belong to (tick all that apply)"
-                    name="organisations"
-                  >
-                    <Checkbox.Group className="w-full">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <Checkbox value="Christian Mothers Association">Christian Mothers Association</Checkbox>
-                        <Checkbox value="Knights of St. John International (KSJI)">Knights of St. John International (KSJI)</Checkbox>
-                        <Checkbox value="Knights and Ladies of Marshall">Knights and Ladies of Marshall</Checkbox>
-                        <Checkbox value="Catholic Youth Organization (CYO)">Catholic Youth Organization (CYO)</Checkbox>
-                        <Checkbox value="Legion of Mary">Legion of Mary</Checkbox>
-                        <Checkbox value="Choir">Choir</Checkbox>
-                        <Checkbox value="Altar Servers">Altar Servers</Checkbox>
-                        <Checkbox value="Lectors">Lectors</Checkbox>
-                        <Checkbox value="Others">Others</Checkbox>
-                      </div>
-                    </Checkbox.Group>
-                      </Form.Item>
-
-                      <Form.Item
-                    noStyle
-                    shouldUpdate={(prevValues, currentValues) => 
-                      prevValues.organisations !== currentValues.organisations
-                    }
-                  >
-                    {({ getFieldValue }) => {
-                      const organisations = getFieldValue('organisations') || [];
-                      return organisations.includes('Others') ? (
-                        <Form.Item
-                          label="Others (specify)"
-                          name="otherOrganisation"
-                          rules={[{ required: true, message: 'Please specify other organisation' }]}
-                          className="mt-4"
-                        >
-                          <Input placeholder="Enter other organisation" size="large" />
-                      </Form.Item>
-                      ) : null;
-                    }}
-                  </Form.Item>
-
-                  </div>
-
-                <div className="border-t pt-4">
                   <h4 className="text-base font-semibold text-gray-900 mb-4">OCCUPATION & SKILLS (OPTIONAL)</h4>
                   <div className="space-y-4">
                       <Form.Item
@@ -1501,21 +1454,6 @@ export default function MembersPage() {
                     value={selectedMember.transferredFromAnotherSociety !== undefined ? selectedMember.transferredFromAnotherSociety : undefined} 
                   />
                   <InfoRow label="Former Society Name" value={selectedMember.formerSocietyName} />
-                  <div className="flex justify-between items-start py-2 border-b border-gray-100">
-                    <span className="text-sm text-gray-600">Organisations</span>
-                    <div className="flex flex-wrap gap-2 max-w-[60%] justify-end">
-                      {selectedMember.organisations && selectedMember.organisations.length > 0 ? (
-                        selectedMember.organisations.map((org, idx) => (
-                          <Tag key={idx} color="cyan" className="text-xs">
-                            {org}
-                          </Tag>
-                        ))
-                      ) : (
-                        <span className="text-sm font-medium text-gray-400">-</span>
-                      )}
-                    </div>
-                  </div>
-                  <InfoRow label="Other Organisation" value={selectedMember.otherOrganisation} />
                 </CardContent>
               </Card>
 
