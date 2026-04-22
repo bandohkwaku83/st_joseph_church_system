@@ -37,7 +37,7 @@ const allNavigation: NavItem[] = [
   { name: 'Attendance', href: '/dashboard/attendance', icon: HiOutlineClipboardCheck, permission: 'attendance' },
   { name: 'Welfare/Dues', href: '/dashboard/welfare-dues', icon: HiReceiptRefund, permission: ['record_income', 'expenditure'] },
   { name: 'Generate Report', href: '/dashboard/generate-report', icon: HiClipboardList, permission: 'generate_report' },
-  { name: 'Tithes', href: '/dashboard/tithes', icon: HiReceiptRefund, permission: 'tithes' },
+  // { name: 'Tithes', href: '/dashboard/tithes', icon: HiReceiptRefund, permission: 'tithes' },
   { name: 'Communication', href: '/dashboard/communication', icon: HiOutlineChatAlt, permission: 'communications' },
   { name: 'Organizations', href: '/dashboard/departments', icon: HiOutlineOfficeBuilding, permission: 'organizations' },
   { name: 'Assets/Equipment', href: '/dashboard/assets', icon: HiOutlineCube, permission: 'assets_or_equipment' },

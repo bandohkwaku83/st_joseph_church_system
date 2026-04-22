@@ -267,6 +267,20 @@ export default function MembersPage() {
     }
   }, [currentStep, showModal]);
 
+  // Watch DOB to auto-fill the Natal Group (day born) field
+  const watchedDob = Form.useWatch('dateOfBirth', form);
+  useEffect(() => {
+    const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    if (watchedDob) {
+      const d = dayjs.isDayjs(watchedDob) ? watchedDob : dayjs(watchedDob);
+      if (d.isValid()) {
+        form.setFieldsValue({ natalGroup: DAY_NAMES[d.day()] });
+        return;
+      }
+    }
+    form.setFieldsValue({ natalGroup: undefined });
+  }, [watchedDob, form]);
+
   // Function to generate unique church number
   const generateChurchNumber = (existingMembers: Member[]): string => {
     // Find the highest existing church number
@@ -554,7 +568,7 @@ export default function MembersPage() {
       {/* Filters and Search */}
       <Card className="relative overflow-hidden">
         <CardContent className="p-3 sm:p-4">
-          <div className="space-y-3 sm:space-y-0">
+          <div className="space-y-3 sm:space-y-4">
             <div className="w-full">
               <Input
                 placeholder="Search by name, parish number, email..."
@@ -910,7 +924,20 @@ export default function MembersPage() {
                       name="dateOfBirth"
                       rules={[{ required: true, message: 'Please select date of birth' }]}
                     >
-                      <DatePicker style={{ width: '100%' }} size="large" format="DD/MM/YYYY" />
+                      <DatePicker
+                        style={{ width: '100%' }}
+                        size="large"
+                        format="DD/MM/YYYY"
+                        disabledDate={(current) => current && current > dayjs().endOf('day')}
+                        onChange={(date) => {
+                          if (date) {
+                            const age = dayjs().diff(date, 'year');
+                            form.setFieldsValue({ age });
+                          } else {
+                            form.setFieldsValue({ age: undefined });
+                          }
+                        }}
+                      />
                     </Form.Item>
                   </Col>
                   <Col xs={24} sm={12}>
@@ -918,10 +945,22 @@ export default function MembersPage() {
                       label="Age"
                       name="age"
                     >
-                      <Input type="number" placeholder="Enter age" size="large" />
+                      <Input type="number" placeholder="Auto-calculated from date of birth" size="large" readOnly />
                     </Form.Item>
                   </Col>
                 </Row>
+
+                <Form.Item
+                  label="Natal Group (Day Born)"
+                  name="natalGroup"
+                  tooltip="Automatically determined from Date of Birth"
+                >
+                  <Input
+                    size="large"
+                    readOnly
+                    placeholder="Auto-filled from Date of Birth"
+                  />
+                </Form.Item>
 
                     <Form.Item
                       label="Marital Status"
@@ -930,6 +969,7 @@ export default function MembersPage() {
                   <Radio.Group size="large">
                     <Radio value="single">Single</Radio>
                     <Radio value="married">Married</Radio>
+                    <Radio value="solemnized">Solemnized</Radio>
                     <Radio value="divorced">Divorced</Radio>
                     <Radio value="widowed">Widowed</Radio>
                   </Radio.Group>
