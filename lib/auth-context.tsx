@@ -648,14 +648,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const addUser = useCallback(
     async (u: StoredUser): Promise<void> => {
-      const res = await apiFetch('/api/users', {
+      // Map frontend roleId to backend role_id
+      let role_id: number;
+      if (u.roleId === 'role_church_admin') {
+        role_id = 1;
+      } else if (u.roleId === HEAD_PASTOR_ROLE_ID) {
+        role_id = 2;
+      } else if (u.roleId === 'role_finance_officer') {
+        role_id = 3;
+      } else {
+        role_id = 1; // default to church admin
+      }
+
+      const res = await apiFetch('users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: u.name,
-          username: u.email,
-          password: u.password,
-          roleId: u.roleId,
+          user: {
+            name: u.name,
+            username: u.email,
+            password: u.password,
+            role_id: role_id,
+          }
         }),
       });
       if (res.status === 401) {
@@ -679,7 +693,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         roleId: u.roleId,
       };
       if (u.password && u.password.trim()) body.password = u.password;
-      const res = await apiFetch(`/api/users/${u.id}`, {
+      const res = await apiFetch(`users/${u.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -709,7 +723,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const role = roles.find((r) => r.id === (toDelete.roleId ?? ''));
         if (role?.isSystemRole) return; // never delete Head Pastor
       }
-      const res = await apiFetch(`/api/users/${id}`, { method: 'DELETE' });
+      const res = await apiFetch(`users/${id}`, { method: 'DELETE' });
       if (res.status === 401) {
         setUser(null);
         throw new Error('Unauthorized');

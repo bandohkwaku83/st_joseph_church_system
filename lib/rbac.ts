@@ -3,15 +3,15 @@ export const PERMISSION_KEYS = [
   'dashboard',
   'add_user',
   'assets_or_equipment',
+  'organizations',
   'communications',
-  'tithes',
+  'welfare',
   'generate_report',
   'expenditure',
   'record_income',
   'attendance',
   'members',
   'create_role',
-  'organizations',
 ] as const;
 
 export type PermissionKey = (typeof PERMISSION_KEYS)[number];
@@ -20,15 +20,15 @@ export const PERMISSION_LABELS: Record<PermissionKey, string> = {
   dashboard: 'Dashboard',
   add_user: 'Add Users',
   assets_or_equipment: 'Assets/Equipment',
+  organizations: 'Organizations',
   communications: 'Communications',
-  tithes: 'Tithes',
+  welfare: 'Welfare',
   generate_report: 'Generate Report',
   expenditure: 'Expenditure',
   record_income: 'Record Income',
   attendance: 'Attendance',
   members: 'Members',
   create_role: 'Create Role',
-  organizations: 'Organizations',
 };
 
 /** Role stored in DB / localStorage. Head Pastor role is system-built-in. */
@@ -57,10 +57,10 @@ export const FINANCE_OFFICER_ROLE_ID = 'role_finance_officer';
 export function getDefaultRoles(): Role[] {
   const financePermissions: PermissionKey[] = [
     'dashboard',
+    'welfare',
+    'generate_report',
     'record_income',
     'expenditure',
-    'generate_report',
-    'tithes',
   ];
   const churchAdminPermissions: PermissionKey[] = PERMISSION_KEYS.filter(
     (k) => k !== 'create_role'

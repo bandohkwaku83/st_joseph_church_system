@@ -27,7 +27,7 @@ import { Table, Tag, Space, Button as AntButton, Input as AntInput, Select as An
 import type { ColumnsType } from 'antd/es/table';
 import { SearchOutlined, DownloadOutlined, EditOutlined, EyeOutlined, PrinterOutlined } from '@ant-design/icons';
 
-type TabType = 'input' | 'expenditure' | 'report' | 'payment-vouchers' | 'tithes';
+type TabType = 'input' | 'expenditure' | 'report' | 'payment-vouchers' | 'welfare';
 
 interface IncomeEntry {
   id: string;
@@ -60,7 +60,7 @@ interface PaymentVoucher {
   status: 'Pending' | 'Approved' | 'Rejected';
 }
 
-interface Tithe {
+interface Welfare {
   id: string;
   memberId: number;
   memberName: string;
@@ -97,16 +97,16 @@ export default function FinancePage() {
   // Set active tab from URL parameter
   useEffect(() => {
     const tabParam = searchParams.get('tab');
-    if (tabParam && ['input', 'expenditure', 'report', 'payment-vouchers', 'tithes'].includes(tabParam)) {
+    if (tabParam && ['input', 'expenditure', 'report', 'payment-vouchers', 'welfare'].includes(tabParam)) {
       setActiveTab(tabParam as TabType);
     }
   }, [searchParams]);
   const [showIncomeModal, setShowIncomeModal] = useState(false);
   const [showExpenditureModal, setShowExpenditureModal] = useState(false);
   const [showVoucherModal, setShowVoucherModal] = useState(false);
-  const [showTitheModal, setShowTitheModal] = useState(false);
+  const [showWelfareModal, setShowWelfareModal] = useState(false);
   const [showReceiptModal, setShowReceiptModal] = useState(false);
-  const [selectedTithe, setSelectedTithe] = useState<Tithe | null>(null);
+  const [selectedWelfare, setSelectedWelfare] = useState<Welfare | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [expenditureSearchTerm, setExpenditureSearchTerm] = useState('');
   
@@ -141,8 +141,8 @@ export default function FinancePage() {
     { id: '1', date: '2024-03-15', category: 'Offerings', subcategory: 'Sunday Morning Service (1st)', amount: 205.00, paymentMethod: 'cash' },
     { id: '2', date: '2024-03-10', category: 'Sunday Offerings', amount: 7360.00, paymentMethod: 'cash' },
     { id: '3', date: '2024-03-12', category: 'Mid-week Services Offerings', amount: 1070.50, paymentMethod: 'mobile-money' },
-    { id: '4', date: '2024-03-10', category: 'Tithes', subcategory: 'Member-linked', amount: 254.80, paymentMethod: 'bank-transfer' },
-    { id: '5', date: '2024-03-10', category: 'Tithes', subcategory: 'Anonymous', amount: 7798.08, paymentMethod: 'cash' },
+    { id: '4', date: '2024-03-10', category: 'Welfare', subcategory: 'Member-linked', amount: 254.80, paymentMethod: 'bank-transfer' },
+    { id: '5', date: '2024-03-10', category: 'Welfare', subcategory: 'Anonymous', amount: 7798.08, paymentMethod: 'cash' },
     { id: '6', date: '2024-03-14', category: 'Special Thanksgiving Offerings', amount: 770.00, paymentMethod: 'cash' },
     { id: '7', date: '2024-03-08', category: 'Donations', subcategory: 'One-off donations', amount: 325.00, paymentMethod: 'bank-transfer' },
     { id: '8', date: '2024-03-09', category: 'Donations', subcategory: 'Welfare donations', amount: 350.00, paymentMethod: 'mobile-money' },
@@ -168,9 +168,9 @@ export default function FinancePage() {
     { id: 2, voucherNo: 'PV-002', date: '2024-01-13', payee: 'John Doe', amount: 150.00, purpose: 'Equipment maintenance', status: 'Pending' },
   ]);
 
-  // Tithes
-  const [tithes, setTithes] = useState<Tithe[]>([]);
-  const [titheForm, setTitheForm] = useState({
+  // Welfare
+  const [welfares, setWelfares] = useState<Welfare[]>([]);
+  const [welfareForm, setWelfareForm] = useState({
     memberId: null as number | null,
     memberName: '',
     amount: '',
@@ -313,7 +313,7 @@ export default function FinancePage() {
     { id: 'expenditure' as TabType, label: 'Expenditure', icon: HiMinus },
     { id: 'report' as TabType, label: 'Generate Report', icon: HiClipboardList },
     { id: 'payment-vouchers' as TabType, label: 'Payment Vouchers', icon: HiDocumentText },
-    { id: 'tithes' as TabType, label: 'Tithes', icon: HiReceiptRefund },
+    { id: 'welfare' as TabType, label: 'Welfare', icon: HiReceiptRefund },
   ];
 
   const incomeCategories = [
@@ -433,39 +433,39 @@ export default function FinancePage() {
   // Generate receipt number
   const generateReceiptNo = (): string => {
     const year = new Date().getFullYear();
-    const count = tithes.filter(t => t.year === year).length + 1;
-    return `TITHE-${year}-${String(count).padStart(4, '0')}`;
+    const count = welfares.filter(w => w.year === year).length + 1;
+    return `WELFARE-${year}-${String(count).padStart(4, '0')}`;
   };
 
-  // Handle tithe submission
-  const handleAddTithe = (e: React.FormEvent) => {
+  // Handle welfare submission
+  const handleAddWelfare = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!titheForm.memberId || !titheForm.memberName || !titheForm.amount) {
+    if (!welfareForm.memberId || !welfareForm.memberName || !welfareForm.amount) {
       return;
     }
 
-    const newTithe: Tithe = {
+    const newWelfare: Welfare = {
       id: Date.now().toString(),
-      memberId: titheForm.memberId,
-      memberName: titheForm.memberName,
-      amount: parseFloat(titheForm.amount) || 0,
-      year: titheForm.year,
+      memberId: welfareForm.memberId,
+      memberName: welfareForm.memberName,
+      amount: parseFloat(welfareForm.amount) || 0,
+      year: welfareForm.year,
       date: new Date().toISOString().slice(0, 10),
       receiptNo: generateReceiptNo(),
     };
 
-    setTithes([...tithes, newTithe]);
-    setTitheForm({
+    setWelfares([...welfares, newWelfare]);
+    setWelfareForm({
       memberId: null,
       memberName: '',
       amount: '',
       year: new Date().getFullYear(),
     });
     setMemberSearchValue('');
-    setShowTitheModal(false);
+    setShowWelfareModal(false);
     
     // Show receipt
-    setSelectedTithe(newTithe);
+    setSelectedWelfare(newWelfare);
     setShowReceiptModal(true);
   };
 
@@ -480,8 +480,8 @@ export default function FinancePage() {
       memberId: member.id,
     }));
 
-  // Tithe table columns
-  const titheColumns: ColumnsType<Tithe> = [
+  // Welfare table columns
+  const welfareColumns: ColumnsType<Welfare> = [
     {
       title: 'Receipt No.',
       dataIndex: 'receiptNo',
@@ -519,14 +519,14 @@ export default function FinancePage() {
     {
       title: 'Actions',
       key: 'actions',
-      render: (_, record: Tithe) => (
+      render: (_, record: Welfare) => (
         <Space>
           <AntButton 
             type="link" 
             icon={<PrinterOutlined />} 
             size="small"
             onClick={() => {
-              setSelectedTithe(record);
+              setSelectedWelfare(record);
               setShowReceiptModal(true);
             }}
           >
@@ -827,10 +827,10 @@ export default function FinancePage() {
               Create Voucher
             </Button>
           )}
-          {activeTab === 'tithes' && (
-            <Button onClick={() => setShowTitheModal(true)} className="shadow-lg">
+          {activeTab === 'welfare' && (
+            <Button onClick={() => setShowWelfareModal(true)} className="shadow-lg">
               <HiPlus className="h-4 w-4 mr-2" />
-              Record Tithe
+              Record Welfare
             </Button>
           )}
         </div>
@@ -1133,8 +1133,8 @@ export default function FinancePage() {
         </Card>
       )}
 
-      {/* Tithes Tab */}
-      {activeTab === 'tithes' && (
+      {/* Welfare Tab */}
+      {activeTab === 'welfare' && (
         <Card className="relative overflow-hidden">
           <div 
             className="absolute top-0 right-0 w-64 h-64"
@@ -1144,7 +1144,7 @@ export default function FinancePage() {
           />
           <CardHeader className="pb-4 relative z-10">
             <div className="flex items-center justify-between mb-4">
-              <CardTitle className="text-base font-semibold text-gray-900">Tithes Records</CardTitle>
+              <CardTitle className="text-base font-semibold text-gray-900">Welfare Records</CardTitle>
               <Space>
                 <AntInput
                   placeholder="Search by member name..."
@@ -1159,15 +1159,15 @@ export default function FinancePage() {
           </CardHeader>
           <CardContent className="relative z-10">
             <Table
-              columns={titheColumns}
-              dataSource={tithes.filter(tithe => 
-                !searchTerm || tithe.memberName.toLowerCase().includes(searchTerm.toLowerCase())
+              columns={welfareColumns}
+              dataSource={welfares.filter(welfare => 
+                !searchTerm || welfare.memberName.toLowerCase().includes(searchTerm.toLowerCase())
               )}
               rowKey="id"
               pagination={{
                 pageSize: 10,
                 showSizeChanger: true,
-                showTotal: (total) => `Total ${total} tithes`,
+                showTotal: (total) => `Total ${total} welfare contributions`,
               }}
             />
           </CardContent>
@@ -1637,12 +1637,12 @@ export default function FinancePage() {
         </form>
       </Drawer>
 
-      {/* Tithe Entry Drawer */}
+      {/* Welfare Entry Drawer */}
       <Drawer
-        open={showTitheModal}
+        open={showWelfareModal}
         onClose={() => {
-          setShowTitheModal(false);
-          setTitheForm({
+          setShowWelfareModal(false);
+          setWelfareForm({
             memberId: null,
             memberName: '',
             amount: '',
@@ -1650,11 +1650,11 @@ export default function FinancePage() {
           });
           setMemberSearchValue('');
         }}
-        title="Record Tithe"
+        title="Record Welfare"
         placement="right"
         width={typeof window !== 'undefined' && window.innerWidth < 640 ? '100%' : 600}
       >
-        <form onSubmit={handleAddTithe} className="p-6 space-y-4">
+        <form onSubmit={handleAddWelfare} className="p-6 space-y-4">
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-2">Member Name *</label>
             <AutoComplete
@@ -1664,14 +1664,14 @@ export default function FinancePage() {
                 setMemberSearchValue(value);
                 const selected = sampleMembers.find(m => m.name === value);
                 if (selected) {
-                  setTitheForm({
-                    ...titheForm,
+                  setWelfareForm({
+                    ...welfareForm,
                     memberId: selected.id,
                     memberName: selected.name,
                   });
                 } else {
-                  setTitheForm({
-                    ...titheForm,
+                  setWelfareForm({
+                    ...welfareForm,
                     memberId: null,
                     memberName: '',
                   });
@@ -1683,8 +1683,8 @@ export default function FinancePage() {
               style={{ width: '100%' }}
               size="large"
             />
-            {titheForm.memberId && (
-              <p className="text-xs text-green-600 mt-1">Selected: {titheForm.memberName}</p>
+            {welfareForm.memberId && (
+              <p className="text-xs text-green-600 mt-1">Selected: {welfareForm.memberName}</p>
             )}
           </div>
           <div className="grid grid-cols-2 gap-4">
@@ -1694,8 +1694,8 @@ export default function FinancePage() {
                 type="number"
                 step="0.01"
                 placeholder="0.00"
-                value={titheForm.amount}
-                onChange={(e) => setTitheForm({ ...titheForm, amount: e.target.value })}
+                value={welfareForm.amount}
+                onChange={(e) => setWelfareForm({ ...welfareForm, amount: e.target.value })}
                 required
               />
             </div>
@@ -1704,8 +1704,8 @@ export default function FinancePage() {
               <Input
                 type="number"
                 placeholder="2024"
-                value={titheForm.year}
-                onChange={(e) => setTitheForm({ ...titheForm, year: parseInt(e.target.value) || new Date().getFullYear() })}
+                value={welfareForm.year}
+                onChange={(e) => setWelfareForm({ ...welfareForm, year: parseInt(e.target.value) || new Date().getFullYear() })}
                 required
                 min={2000}
                 max={2100}
@@ -1714,8 +1714,8 @@ export default function FinancePage() {
           </div>
           <div className="flex gap-3 pt-4 border-t border-gray-200">
             <Button type="button" variant="outline" onClick={() => {
-              setShowTitheModal(false);
-              setTitheForm({
+              setShowWelfareModal(false);
+              setWelfareForm({
                 memberId: null,
                 memberName: '',
                 amount: '',
@@ -1737,30 +1737,30 @@ export default function FinancePage() {
         open={showReceiptModal}
         onClose={() => {
           setShowReceiptModal(false);
-          setSelectedTithe(null);
+          setSelectedWelfare(null);
         }}
-        title="Tithe Receipt"
+        title="Welfare Receipt"
         placement="right"
         width={typeof window !== 'undefined' && window.innerWidth < 640 ? '100%' : 600}
       >
-        {selectedTithe && (
+        {selectedWelfare && (
           <div className="p-4 sm:p-6">
-            <div id="tithe-receipt" className="bg-white p-8 border-2 border-gray-300">
+            <div id="welfare-receipt" className="bg-white p-8 border-2 border-gray-300">
               {/* Header */}
               <div className="text-center border-b-2 border-gray-400 pb-4 mb-6">
                 <h2 className="text-2xl font-bold text-gray-900 mb-2">ST. JOSEPH PARISH CHURCH</h2>
-                <p className="text-base font-bold text-gray-900 mt-2">TITHE RECEIPT</p>
+                <p className="text-base font-bold text-gray-900 mt-2">WELFARE RECEIPT</p>
               </div>
 
               {/* Receipt Details */}
               <div className="space-y-4 mb-6">
                 <div className="flex justify-between items-center">
                   <span className="text-sm font-semibold text-gray-700">Receipt No.:</span>
-                  <span className="text-sm font-bold text-gray-900">{selectedTithe.receiptNo}</span>
+                  <span className="text-sm font-bold text-gray-900">{selectedWelfare.receiptNo}</span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-sm font-semibold text-gray-700">Date:</span>
-                  <span className="text-sm text-gray-900">{new Date(selectedTithe.date).toLocaleDateString('en-US', { 
+                  <span className="text-sm text-gray-900">{new Date(selectedWelfare.date).toLocaleDateString('en-US', { 
                     year: 'numeric', 
                     month: 'long', 
                     day: 'numeric' 
@@ -1769,15 +1769,15 @@ export default function FinancePage() {
                 <div className="border-t border-gray-300 pt-4 mt-4">
                   <div className="flex justify-between items-center mb-2">
                     <span className="text-sm font-semibold text-gray-700">Member Name:</span>
-                    <span className="text-sm font-bold text-gray-900">{selectedTithe.memberName}</span>
+                    <span className="text-sm font-bold text-gray-900">{selectedWelfare.memberName}</span>
                   </div>
                   <div className="flex justify-between items-center mb-2">
                     <span className="text-sm font-semibold text-gray-700">Year:</span>
-                    <span className="text-sm text-gray-900">{selectedTithe.year}</span>
+                    <span className="text-sm text-gray-900">{selectedWelfare.year}</span>
                   </div>
                   <div className="flex justify-between items-center pt-4 border-t border-gray-300 mt-4">
                     <span className="text-base font-bold text-gray-900">Amount Paid:</span>
-                    <span className="text-xl font-bold text-gray-900">GHC {selectedTithe.amount.toFixed(2)}</span>
+                    <span className="text-xl font-bold text-gray-900">GHC {selectedWelfare.amount.toFixed(2)}</span>
                   </div>
                 </div>
               </div>
@@ -1786,7 +1786,7 @@ export default function FinancePage() {
               <div className="border-t-2 border-gray-400 pt-4 mb-6">
                 <p className="text-sm text-gray-700">
                   <span className="font-semibold">Amount in Words:</span>{' '}
-                  <span className="italic">{convertNumberToWords(selectedTithe.amount)} Only</span>
+                  <span className="italic">{convertNumberToWords(selectedWelfare.amount)} Only</span>
                 </p>
               </div>
 
@@ -1819,7 +1819,7 @@ export default function FinancePage() {
                 variant="outline" 
                 onClick={() => {
                   setShowReceiptModal(false);
-                  setSelectedTithe(null);
+                  setSelectedWelfare(null);
                 }} 
                 className="flex-1"
               >
@@ -1828,14 +1828,14 @@ export default function FinancePage() {
               <Button 
                 type="button" 
                 onClick={() => {
-                  const printContent = document.getElementById('tithe-receipt');
+                  const printContent = document.getElementById('welfare-receipt');
                   if (printContent) {
                     const printWindow = window.open('', '_blank');
                     if (printWindow) {
                       printWindow.document.write(`
                         <html>
                           <head>
-                            <title>Tithe Receipt - ${selectedTithe.receiptNo}</title>
+                            <title>Welfare Receipt - ${selectedWelfare.receiptNo}</title>
                             <style>
                               body { 
                                 font-family: Arial, sans-serif; 

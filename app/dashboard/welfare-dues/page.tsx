@@ -141,7 +141,7 @@ export default function WelfareDuesPage() {
         return;
       }
 
-      const response = await apiRequest<{ welfares: BackendWelfare[] }>('welfares', {
+      const response = await apiRequest<{ welfares?: BackendWelfare[]; data?: BackendWelfare[]; status?: string }>('welfares', {
         headers: {
           'Authorization': `Bearer ${token}`,
         },

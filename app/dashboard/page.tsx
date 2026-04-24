@@ -83,74 +83,274 @@ export default function Dashboard() {
   const { user, hasRole } = useAuth();
   const { showToast } = useToast();
   const isAdmin = hasRole('church_admin');
-  const isFinanceOfficer = hasRole('finance_officer');
+  const isFinanceOfficer = hasRole('role_finance_officer');
+  const isHeadPastor = hasRole('head_pastor');
 
   // API data state
   const [members, setMembers] = useState<any[]>([]);
   const [organizations, setOrganizations] = useState<any[]>([]);
+  const [welfares, setWelfares] = useState<any[]>([]);
+  const [attendances, setAttendances] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [welfareError, setWelfareError] = useState<string | null>(null);
+  const [memberError, setMemberError] = useState<string | null>(null);
 
   // Fetch members from API
   const fetchMembers = useCallback(async () => {
     try {
       const token = localStorage.getItem('auth_token');
+      const tokenExpires = localStorage.getItem('auth_token_expires');
+      
       if (!token) {
         console.warn('No auth token found, skipping members fetch');
         return;
       }
 
-      console.log('Fetching members from API...');
-      const response = await apiRequest<{ members: any[] }>('members', {
+      // Check if token is expired
+      if (tokenExpires) {
+        const expiryDate = new Date(tokenExpires);
+        const now = new Date();
+        if (now > expiryDate) {
+          console.warn('Auth token has expired, clearing session');
+          localStorage.removeItem('auth_token');
+          localStorage.removeItem('auth_token_expires');
+          localStorage.removeItem('auth_user_data');
+          setError('Session expired. Please log in again.');
+          return;
+        }
+      }
+
+      const response = await apiRequest<{ members?: any[]; status?: string; data?: any }>('members', {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
       });
 
-      console.log('Members API response:', response);
-
       if (response.data && response.data.members && Array.isArray(response.data.members)) {
-        console.log('Successfully loaded', response.data.members.length, 'members');
+        setMembers(response.data.members);
+      } else if (response.data && Array.isArray(response.data)) {
+        // Handle case where members array is directly in response.data
+        console.log('Members found directly in response.data, loaded', response.data.length, 'members');
+        setMembers(response.data);
+      } else if (response.data && response.data.status === 'OK' && response.data.members && Array.isArray(response.data.members)) {
+        // Handle the expected API response format: {message: "...", status: "OK", members: [...]}
         setMembers(response.data.members);
       } else if (response.error) {
         console.error('Error fetching members:', response.error.message);
-        setError(`Failed to load members: ${response.error.message}`);
+        console.error('Full error object:', response.error);
+        console.error('HTTP status:', response.status);
+        
+        let errorMessage = response.error.message;
+        if (response.status === 401) {
+          errorMessage = 'Authentication failed. Please log in again.';
+          // Clear invalid token
+          localStorage.removeItem('auth_token');
+          localStorage.removeItem('auth_token_expires');
+          localStorage.removeItem('auth_user_data');
+        } else if (response.status === 403) {
+          errorMessage = 'Access denied. You do not have permission to view members.';
+        } else if (response.status === 404) {
+          errorMessage = 'Members endpoint not found. Please check if the backend API is properly configured.';
+        } else if (response.status >= 500) {
+          errorMessage = 'Server error occurred. Please try again later.';
+        }
+        
+        setError(`Failed to load members (${response.status}): ${errorMessage}`);
+        setMemberError(`Failed to load members (${response.status}): ${errorMessage}`);
       } else {
         console.warn('Unexpected members API response format:', response);
+        console.warn('Expected: {data: {members: []}} or {data: []} but got:', response);
         setError('Unexpected response format from members API');
       }
     } catch (error) {
       console.error('Error fetching members:', error);
       setError('Network error occurred while fetching members');
+      setMemberError('Network error occurred while fetching members');
     }
   }, []);
 
-  // Fetch organizations from API
-  const fetchOrganizations = useCallback(async () => {
+  // Fetch welfares from API (for financial officer)
+  const fetchWelfares = useCallback(async () => {
     try {
       const token = localStorage.getItem('auth_token');
+      const tokenExpires = localStorage.getItem('auth_token_expires');
+      
       if (!token) {
-        console.warn('No auth token found, skipping organizations fetch');
+        console.warn('No auth token found, skipping welfares fetch');
         return;
       }
 
-      console.log('Fetching organizations from API...');
-      const response = await apiRequest<{ organisations: any[] }>('organisations', {
+      // Check if token is expired
+      if (tokenExpires) {
+        const expiryDate = new Date(tokenExpires);
+        const now = new Date();
+        if (now > expiryDate) {
+          console.warn('Auth token has expired, clearing session');
+          localStorage.removeItem('auth_token');
+          localStorage.removeItem('auth_token_expires');
+          localStorage.removeItem('auth_user_data');
+          setError('Session expired. Please log in again.');
+          return;
+        }
+      }
+
+      const response = await apiRequest<{ welfares?: any[]; data?: any; status?: string }>('welfares', {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
       });
 
-      console.log('Organizations API response:', response);
+      if (response.data && response.data.data && Array.isArray(response.data.data)) {
+        setWelfares(response.data.data);
+      } else if (response.data && Array.isArray(response.data)) {
+        // Handle case where welfares array is directly in response.data
+        console.log('Welfares found directly in response.data, loaded', response.data.length, 'welfares');
+        setWelfares(response.data);
+      } else if (response.error) {
+        console.error('Error fetching welfares:', response.error.message);
+        console.error('Full error object:', response.error);
+        console.error('HTTP status:', response.status);
+        
+        let errorMessage = response.error.message;
+        if (response.status === 401) {
+          errorMessage = 'Authentication failed. Please log in again.';
+          // Clear invalid token
+          localStorage.removeItem('auth_token');
+          localStorage.removeItem('auth_token_expires');
+          localStorage.removeItem('auth_user_data');
+        } else if (response.status === 403) {
+          errorMessage = 'Access denied. You do not have permission to view welfares.';
+        } else if (response.status === 404) {
+          errorMessage = 'Welfares endpoint not found. Please check if the backend API is properly configured.';
+        } else if (response.status >= 500) {
+          errorMessage = 'Server error occurred. Please try again later.';
+        }
+        
+        setError(`Failed to load welfares (${response.status}): ${errorMessage}`);
+        setWelfareError(`Failed to load welfares (${response.status}): ${errorMessage}`);
+      } else {
+        console.warn('Unexpected welfares API response format:', response);
+        console.warn('Expected: {data: {welfares: []}} or {data: []} but got:', response);
+        setError('Unexpected response format from welfares API');
+      }
+    } catch (error) {
+      console.error('Error fetching welfares:', error);
+      setError('Network error occurred while fetching welfares');
+      setWelfareError('Network error occurred while fetching welfares');
+    }
+  }, []);
+  
+  // Fetch attendances from API (for pastor)
+  const fetchAttendances = useCallback(async () => {
+    try {
+      const token = localStorage.getItem('auth_token');
+      const tokenExpires = localStorage.getItem('auth_token_expires');
+      
+      if (!token) {
+        console.warn('No auth token found, skipping attendances fetch');
+        return;
+      }
+
+      // Check if token is expired
+      if (tokenExpires) {
+        const expiryDate = new Date(tokenExpires);
+        const now = new Date();
+        if (now > expiryDate) {
+          console.warn('Auth token has expired, clearing session');
+          localStorage.removeItem('auth_token');
+          localStorage.removeItem('auth_token_expires');
+          localStorage.removeItem('auth_user_data');
+          setError('Session expired. Please log in again.');
+          return;
+        }
+      }
+
+      const response = await apiRequest<{ attendances?: any[]; data?: any; status?: string }>('attendances', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (response.data && response.data.attendances && Array.isArray(response.data.attendances)) {
+        setAttendances(response.data.attendances);
+      } else if (response.data && Array.isArray(response.data)) {
+        // Handle case where attendances array is directly in response.data
+        setAttendances(response.data);
+      } else if (response.error) {
+        console.error('Error fetching attendances:', response.error.message);
+        // Don't set error for attendances since it might be a permission issue
+        console.warn('Attendances data not available, using fallback data');
+      } else {
+        console.warn('Unexpected attendances API response format:', response);
+        console.warn('Expected: {data: {attendances: []}} or {data: []} but got:', response);
+      }
+    } catch (error) {
+      console.error('Error fetching attendances:', error);
+      console.warn('Attendances data not available, using fallback data');
+    }
+  }, []);
+
+  const fetchOrganizations = useCallback(async () => {
+    try {
+      const token = localStorage.getItem('auth_token');
+      const tokenExpires = localStorage.getItem('auth_token_expires');
+      
+      if (!token) {
+        console.warn('No auth token found, skipping organizations fetch');
+        return;
+      }
+
+      // Check if token is expired
+      if (tokenExpires) {
+        const expiryDate = new Date(tokenExpires);
+        const now = new Date();
+        if (now > expiryDate) {
+          console.warn('Auth token has expired, clearing session');
+          localStorage.removeItem('auth_token');
+          localStorage.removeItem('auth_token_expires');
+          localStorage.removeItem('auth_user_data');
+          setError('Session expired. Please log in again.');
+          return;
+        }
+      }
+
+      const response = await apiRequest<{ organisations?: any[]; data?: any; status?: string }>('organisations', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
 
       if (response.data && response.data.organisations && Array.isArray(response.data.organisations)) {
-        console.log('Successfully loaded', response.data.organisations.length, 'organizations');
         setOrganizations(response.data.organisations);
+      } else if (response.data && Array.isArray(response.data)) {
+        // Handle case where organizations array is directly in response.data
+        console.log('Organizations found directly in response.data, loaded', response.data.length, 'organizations');
+        setOrganizations(response.data);
       } else if (response.error) {
         console.error('Error fetching organizations:', response.error.message);
-        setError(`Failed to load organizations: ${response.error.message}`);
+        console.error('Full error object:', response.error);
+        console.error('HTTP status:', response.status);
+        
+        let errorMessage = response.error.message;
+        if (response.status === 401) {
+          errorMessage = 'Authentication failed. Please log in again.';
+          // Clear invalid token
+          localStorage.removeItem('auth_token');
+          localStorage.removeItem('auth_token_expires');
+          localStorage.removeItem('auth_user_data');
+        } else if (response.status === 403) {
+          errorMessage = 'Access denied. You do not have permission to view organizations.';
+        } else if (response.status === 404) {
+          errorMessage = 'Organizations endpoint not found. Please check if the backend API is properly configured.';
+        } else if (response.status >= 500) {
+          errorMessage = 'Server error occurred. Please try again later.';
+        }
+        
+        setError(`Failed to load organizations (${response.status}): ${errorMessage}`);
       } else {
         console.warn('Unexpected organizations API response format:', response);
+        console.warn('Expected: {data: {organisations: []}} or {data: []} but got:', response);
         setError('Unexpected response format from organizations API');
       }
     } catch (error) {
@@ -163,11 +363,29 @@ export default function Dashboard() {
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
-      await Promise.all([fetchMembers(), fetchOrganizations()]);
+      if (isFinanceOfficer) {
+        // Financial officer needs welfares data, members data is optional (may not have permission)
+        await fetchWelfares();
+        // Try to fetch members but don't fail if no permission
+        try {
+          await fetchMembers();
+        } catch (error) {
+          console.warn('Financial officer cannot access members data, using fallback member count');
+          // Clear member-related errors for financial officers since it's expected
+          setError(null);
+          setMemberError(null);
+        }
+      } else if (isHeadPastor) {
+        // Head Pastor needs all data: members, organizations, welfares, and attendances
+        await Promise.all([fetchMembers(), fetchOrganizations(), fetchWelfares(), fetchAttendances()]);
+      } else {
+        // Admin needs members, organizations, and attendances
+        await Promise.all([fetchMembers(), fetchOrganizations(), fetchAttendances()]);
+      }
       setLoading(false);
     };
     fetchData();
-  }, [fetchMembers, fetchOrganizations]);
+  }, [fetchMembers, fetchOrganizations, fetchWelfares, fetchAttendances, isFinanceOfficer, isHeadPastor]);
 
   // Calculate member statistics from API data
   const memberStats = useMemo(() => {
@@ -256,19 +474,112 @@ export default function Dashboard() {
       fallback: false,
     };
   }, [organizations, loading, error]);
-  const [duesPayments] = useState<DuesPayment[]>([
-    { id: '1', date: '2026-04-14', memberName: 'Kwame Asante', amount: 50, method: 'Cash' },
-    { id: '2', date: '2026-04-13', memberName: 'Ama Mensah', amount: 50, method: 'Mobile Money' },
-    { id: '3', date: '2026-04-10', memberName: 'Akosua Adjei', amount: 25, method: 'Bank Transfer' },
-    { id: '4', date: '2026-04-08', memberName: 'Efua Boateng', amount: 50, method: 'Cash' },
-    { id: '5', date: '2026-03-28', memberName: 'Yaw Appiah', amount: 50, method: 'Mobile Money' },
-    { id: '6', date: '2026-03-25', memberName: 'Kwame Asante', amount: 50, method: 'Cash' },
-    { id: '7', date: '2026-03-24', memberName: 'Ama Mensah', amount: 50, method: 'Cash' },
-    { id: '8', date: '2026-03-22', memberName: 'Kofi Osei', amount: 50, method: 'Bank Transfer' },
-    { id: '9', date: '2026-03-20', memberName: 'Akosua Adjei', amount: 50, method: 'Cash' },
-    { id: '10', date: '2026-03-18', memberName: 'Efua Boateng', amount: 50, method: 'Cash' },
-    { id: '11', date: '2026-03-15', memberName: 'Yaw Appiah', amount: 40, method: 'Cash' },
-  ]);
+
+  // Calculate attendance statistics from API data
+  const attendanceStats = useMemo(() => {
+    if (loading) {
+      return {
+        totalThisMonth: 0,
+        averagePerService: 0,
+        servicesThisMonth: 0,
+        growth: 0,
+        loading: true,
+      };
+    }
+
+    if (error || attendances.length === 0) {
+      // Fallback to hardcoded values when API is not available
+      return {
+        totalThisMonth: 2840,
+        averagePerService: 142,
+        servicesThisMonth: 20,
+        growth: 5.2,
+        loading: false,
+        fallback: true,
+      };
+    }
+
+    // Calculate current month attendance
+    const now = new Date();
+    const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    
+    const currentMonthAttendances = attendances.filter(attendance => {
+      if (!attendance.date) return false;
+      // Validate date
+      const date = new Date(attendance.date);
+      if (isNaN(date.getTime())) {
+        console.warn('Invalid date found in attendance record:', attendance.date);
+        return false;
+      }
+      return attendance.date.startsWith(currentMonth);
+    });
+
+    const totalThisMonth = currentMonthAttendances.reduce((sum, attendance) => {
+      return sum + (attendance.total || 0);
+    }, 0);
+
+    const servicesThisMonth = currentMonthAttendances.length;
+    const averagePerService = servicesThisMonth > 0 ? Math.round(totalThisMonth / servicesThisMonth) : 0;
+
+    // Calculate growth (compare with previous month)
+    const prevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const prevMonthStr = `${prevMonth.getFullYear()}-${String(prevMonth.getMonth() + 1).padStart(2, '0')}`;
+    
+    const prevMonthAttendances = attendances.filter(attendance => {
+      if (!attendance.date) return false;
+      // Validate date
+      const date = new Date(attendance.date);
+      if (isNaN(date.getTime())) {
+        console.warn('Invalid date found in attendance record:', attendance.date);
+        return false;
+      }
+      return attendance.date.startsWith(prevMonthStr);
+    });
+
+    const prevMonthTotal = prevMonthAttendances.reduce((sum, attendance) => {
+      return sum + (attendance.total || 0);
+    }, 0);
+
+    const growth = prevMonthTotal > 0 ? ((totalThisMonth - prevMonthTotal) / prevMonthTotal) * 100 : 0;
+
+    return {
+      totalThisMonth,
+      averagePerService,
+      servicesThisMonth,
+      growth: parseFloat(growth.toFixed(1)),
+      loading: false,
+      fallback: false,
+    };
+  }, [attendances, loading, error]);
+
+  // Calculate dues payments from API data or use hardcoded fallback
+  const duesPayments = useMemo(() => {
+    if (isFinanceOfficer && welfares.length > 0) {
+      // Map API welfare data to DuesPayment format
+      return welfares.map((welfare) => ({
+        id: welfare.id?.toString() || Math.random().toString(),
+        date: welfare.payment_date || new Date().toISOString().split('T')[0],
+        memberName: welfare.member_name || 'Unknown Member',
+        amount: parseFloat(welfare.amount) || 0,
+        method: welfare.payment_method || 'Cash',
+      }));
+    }
+    
+    // Fallback to hardcoded data
+    return [
+      { id: '1', date: '2026-04-14', memberName: 'Kwame Asante', amount: 50, method: 'Cash' },
+      { id: '2', date: '2026-04-13', memberName: 'Ama Mensah', amount: 50, method: 'Mobile Money' },
+      { id: '3', date: '2026-04-10', memberName: 'Akosua Adjei', amount: 25, method: 'Bank Transfer' },
+      { id: '4', date: '2026-04-08', memberName: 'Efua Boateng', amount: 50, method: 'Cash' },
+      { id: '5', date: '2026-03-28', memberName: 'Yaw Appiah', amount: 50, method: 'Mobile Money' },
+      { id: '6', date: '2026-03-25', memberName: 'Kwame Asante', amount: 50, method: 'Cash' },
+      { id: '7', date: '2026-03-24', memberName: 'Ama Mensah', amount: 50, method: 'Cash' },
+      { id: '8', date: '2026-03-22', memberName: 'Kofi Osei', amount: 50, method: 'Bank Transfer' },
+      { id: '9', date: '2026-03-20', memberName: 'Akosua Adjei', amount: 50, method: 'Cash' },
+      { id: '10', date: '2026-03-18', memberName: 'Efua Boateng', amount: 50, method: 'Cash' },
+      { id: '11', date: '2026-03-15', memberName: 'Yaw Appiah', amount: 40, method: 'Cash' },
+    ];
+  }, [isFinanceOfficer, welfares]);
 
   const duesMonthStats = useMemo(() => {
     const now = new Date();
@@ -283,7 +594,13 @@ export default function Dashboard() {
       .filter((p) => p.date.startsWith(prevMonthStr))
       .reduce((sum, p) => sum + p.amount, 0);
 
-    const expected = EXPECTED_MONTHLY_DUES_TOTAL;
+    // Calculate expected based on actual member count for financial officers
+    let memberCount = WELFARE_ROSTER_MEMBER_COUNT; // fallback
+    if (isFinanceOfficer && members.length > 0) {
+      memberCount = members.length;
+    }
+    
+    const expected = memberCount * MONTHLY_DUES_GHC;
     const outstanding = Math.max(0, expected - collected);
     const prevOutstanding = Math.max(0, expected - prevCollected);
     const collectionPct = expected > 0 ? (collected / expected) * 100 : 0;
@@ -301,8 +618,9 @@ export default function Dashboard() {
       prevCollected,
       prevOutstanding,
       targetProgressVsPrev: parseFloat((collectionPct - prevCollectionPct).toFixed(1)),
+      memberCount, // Include member count for display
     };
-  }, [duesPayments]);
+  }, [duesPayments, isFinanceOfficer, members]);
 
   const recentDuesPayments = useMemo(() => {
     return [...duesPayments]
@@ -337,10 +655,10 @@ export default function Dashboard() {
         growth: memberStats.growth,
       },
       attendance: {
-        totalThisMonth: 2840, // Keep hardcoded for now as attendance API not integrated yet
-        averagePerService: 142,
-        servicesThisMonth: 20,
-        growth: 5.2,
+        totalThisMonth: attendanceStats.totalThisMonth,
+        averagePerService: attendanceStats.averagePerService,
+        servicesThisMonth: attendanceStats.servicesThisMonth,
+        growth: attendanceStats.growth,
       },
       dues: duesMonthStats,
       organizations: {
@@ -348,7 +666,7 @@ export default function Dashboard() {
         activeLeaders: organizationStats.activeLeaders,
       },
     }),
-    [memberStats, organizationStats, duesMonthStats]
+    [memberStats, organizationStats, duesMonthStats, attendanceStats]
   );
 
   const headPastorRecentActivity = useMemo(
@@ -443,8 +761,8 @@ export default function Dashboard() {
       },
       {
         title: 'Monthly Attendance',
-        value: '2,840', // Keep hardcoded for now as attendance API not integrated yet
-        change: '+5.2%',
+        value: attendanceStats.totalThisMonth.toLocaleString(),
+        change: attendanceStats.fallback ? 'Using fallback data' : `+${attendanceStats.growth}%`,
         trend: 'up' as const,
         icon: HiOutlineClipboardCheck,
         color: 'text-green-600',
@@ -695,6 +1013,9 @@ export default function Dashboard() {
       },
     ];
 
+    // Show error message if API calls failed
+    const showApiError = error && !loading;
+
     return (
       <div className="space-y-6">
         <div>
@@ -705,6 +1026,32 @@ export default function Dashboard() {
             Welfare and monthly dues for St. Joseph Catholic Church — record payments and run reports
           </p>
         </div>
+
+        {/* API Error Alert */}
+        {showApiError && (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+            <div className="flex">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <h3 className="text-sm font-medium text-yellow-800">
+                  API Connection Issue
+                </h3>
+                <div className="mt-2 text-sm text-yellow-700">
+                  <p>Unable to load some data from the backend API. Using fallback data for display. Error: {welfareError || error}</p>
+                  <p className="mt-1">Please check that the backend server is running at {getApiBase()}</p>
+                  {error.includes('403') && (
+                    <p className="mt-1 text-yellow-600">Note: Some data may be restricted based on your user permissions.</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Main Stats Row */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
           {stats.map((stat, index) => {
@@ -783,7 +1130,7 @@ export default function Dashboard() {
                     <p className="text-lg font-semibold text-gray-900">
                       GHC {duesMonthStats.expected.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </p>
-                    <p className="text-xs text-gray-500 mt-1">{WELFARE_ROSTER_MEMBER_COUNT} members × GHC {MONTHLY_DUES_GHC}</p>
+                    <p className="text-xs text-gray-500 mt-1">{duesMonthStats.memberCount} members × GHC {MONTHLY_DUES_GHC}</p>
                   </div>
                   <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
                     <p className="text-xs text-gray-600">Outstanding</p>
@@ -901,7 +1248,6 @@ export default function Dashboard() {
   }
 
   // Executive Dashboard for Head Pastor
-  const isHeadPastor = hasRole('head_pastor');
   
   if (isHeadPastor) {
     const executiveStatsCards = [
@@ -1080,7 +1426,7 @@ export default function Dashboard() {
                     GHC {executiveStats.dues.expected.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </p>
                   <p className="mt-2 text-xs text-gray-500">
-                    {WELFARE_ROSTER_MEMBER_COUNT} members × GHC {MONTHLY_DUES_GHC}
+                    {duesMonthStats.memberCount} members × GHC {MONTHLY_DUES_GHC}
                   </p>
                 </div>
                 <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 sm:p-4">

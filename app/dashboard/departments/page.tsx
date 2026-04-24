@@ -9,10 +9,11 @@ import {
 } from 'react-icons/hi';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Table, Tag, Button as AntButton, Input as AntInput, Drawer, message, Spin } from 'antd';
+import { Table, Tag, Button as AntButton, Input as AntInput, Drawer, Spin } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { SearchOutlined, EditOutlined, EyeOutlined, PlusOutlined, LoadingOutlined } from '@ant-design/icons';
 import { useAuth } from '@/lib/auth-context';
+import { useToast } from '@/lib/toast-context';
 import { apiRequest } from '@/lib/api';
 
 interface Department {
@@ -74,6 +75,7 @@ export default function DepartmentsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { hasRole, hasPermission, isSuperAdmin } = useAuth();
+  const { showToast } = useToast();
   const [showModal, setShowModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
   const [showManageModal, setShowManageModal] = useState(false);
@@ -83,6 +85,7 @@ export default function DepartmentsPage() {
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [departments, setDepartments] = useState<Department[]>([]);
+  const [members, setMembers] = useState<any[]>([]);
   const [createForm, setCreateForm] = useState({
     name: '',
     description: '',
@@ -92,6 +95,7 @@ export default function DepartmentsPage() {
     name: '',
     description: '',
     status: 'active',
+    leader_id: null as number | null,
   });
 
   // Fetch organizations from API
@@ -108,7 +112,7 @@ export default function DepartmentsPage() {
       });
 
       if (response.error) {
-        message.error(`Failed to fetch organizations: ${response.error.message}`);
+        showToast(`Failed to fetch organizations: ${response.error.message}`, 'error');
         return;
       }
 
@@ -128,10 +132,48 @@ export default function DepartmentsPage() {
       }
     } catch (error) {
       console.error('Error fetching organizations:', error);
-      message.error('Failed to fetch organizations');
+      showToast('Failed to fetch organizations', 'error');
     } finally {
       setLoading(false);
     }
+  };
+
+  // Fetch members from API
+  const fetchMembers = async () => {
+    try {
+      const token = localStorage.getItem('auth_token');
+      
+      const response = await apiRequest<{ members: any[] }>('/members', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (response.error) {
+        console.error('Failed to fetch members:', response.error.message);
+        return;
+      }
+
+      if (response.data?.members) {
+        setMembers(response.data.members);
+      }
+    } catch (error) {
+      console.error('Error fetching members:', error);
+    }
+  };
+
+  // Helper function to get member name by ID
+  const getMemberName = (memberId: number | null): string => {
+    if (!memberId) return 'No Leader';
+    
+    const member = members.find(m => m.id === memberId);
+    if (member) {
+      return `${member.surname || ''} ${member.other_names || ''}`.trim() || 
+             `${member.first_name || ''} ${member.last_name || ''}`.trim() ||
+             `Member ${memberId}`;
+    }
+    return `Member ${memberId}`;
   };
 
   // Create organization
@@ -158,11 +200,11 @@ export default function DepartmentsPage() {
       });
 
       if (response.error) {
-        message.error(`Failed to create organization: ${response.error.message}`);
+        showToast(`Failed to create organization: ${response.error.message}`, 'error');
         return;
       }
 
-      message.success('Organization created successfully!');
+      showToast('Organization created successfully!', 'success');
       setShowModal(false);
       setCreateForm({ name: '', description: '', status: 'active' });
       
@@ -170,15 +212,18 @@ export default function DepartmentsPage() {
       await fetchOrganizations();
     } catch (error) {
       console.error('Error creating organization:', error);
-      message.error('Failed to create organization');
+      showToast('Failed to create organization', 'error');
     } finally {
       setCreating(false);
     }
   };
 
-  // Load organizations on component mount and when refresh param is present
+  // Load organizations and members on component mount and when refresh param is present
   useEffect(() => {
-    fetchOrganizations();
+    const fetchData = async () => {
+      await Promise.all([fetchOrganizations(), fetchMembers()]);
+    };
+    fetchData();
   }, []);
 
   // Check for refresh parameter and refetch if present
@@ -394,6 +439,21 @@ export default function DepartmentsPage() {
                           {org.description}
                         </span>
                       </div>
+                      <div className="flex items-center justify-between py-2 border-b border-gray-100">
+                        <span className="text-sm text-gray-600 flex items-center gap-2">
+                          <HiOutlineUsers className="h-4 w-4" />
+                          Leader
+                        </span>
+                        <span className="text-sm font-medium text-gray-900">
+                          {org.leader_id ? (
+                            <Tag color="gold" className="text-xs">
+                              {getMemberName(org.leader_id)}
+                            </Tag>
+                          ) : (
+                            <span className="text-gray-400">No Leader</span>
+                          )}
+                        </span>
+                      </div>
                       <div className="flex items-center justify-between py-2">
                         <span className="text-sm text-gray-600 flex items-center gap-2">
                           <HiOutlineUsers className="h-4 w-4" />
@@ -437,6 +497,7 @@ export default function DepartmentsPage() {
                             name: org.name,
                             description: org.description,
                             status: 'active',
+                            leader_id: org.leader_id,
                           });
                           setShowManageModal(true);
                         }}
@@ -508,12 +569,25 @@ export default function DepartmentsPage() {
             </div>
 
             <div className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="bg-gray-50 rounded-lg p-4">
                   <p className="text-sm text-gray-600 mb-1">Description</p>
                   <p className="text-base font-semibold text-gray-900 flex items-center gap-2">
                     <HiUserGroup className="h-4 w-4 text-gray-500" />
                     {selectedOrganization.description}
+                  </p>
+                </div>
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <p className="text-sm text-gray-600 mb-1">Leader</p>
+                  <p className="text-base font-semibold text-gray-900 flex items-center gap-2">
+                    <HiOutlineUsers className="h-4 w-4 text-gray-500" />
+                    {selectedOrganization.leader_id ? (
+                      <Tag color="gold" className="text-sm">
+                        {getMemberName(selectedOrganization.leader_id)}
+                      </Tag>
+                    ) : (
+                      <span className="text-gray-400">No Leader Assigned</span>
+                    )}
                   </p>
                 </div>
                 <div className="bg-gray-50 rounded-lg p-4">
@@ -531,11 +605,20 @@ export default function DepartmentsPage() {
                   <Table
                     columns={[
                       {
-                        title: 'Member ID',
+                        title: 'Member',
                         dataIndex: 'member_id',
                         key: 'member_id',
                         render: (member_id: number) => (
-                          <span className="text-sm font-medium text-gray-900">{member_id}</span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium text-gray-900">
+                              {getMemberName(member_id)}
+                            </span>
+                            {selectedOrganization.leader_id === member_id && (
+                              <Tag color="gold" className="text-xs">
+                                Leader
+                              </Tag>
+                            )}
+                          </div>
                         ),
                       },
                       {
@@ -561,6 +644,11 @@ export default function DepartmentsPage() {
                     ]}
                     dataSource={selectedOrganization.members}
                     rowKey={(record) => `member-${record.member_id}`}
+                    rowClassName={(record) => 
+                      selectedOrganization.leader_id === record.member_id 
+                        ? 'bg-yellow-50 border-l-4 border-yellow-400' 
+                        : ''
+                    }
                     pagination={{
                       pageSize: 10,
                       showSizeChanger: true,
@@ -612,7 +700,7 @@ export default function DepartmentsPage() {
                   const token = localStorage.getItem('auth_token');
                   
                   if (!token) {
-                    message.error('No authentication token found');
+                    showToast('No authentication token found', 'error');
                     return;
                   }
 
@@ -621,6 +709,7 @@ export default function DepartmentsPage() {
                       name: manageForm.name,
                       description: manageForm.description,
                       status: manageForm.status,
+                      leader_id: manageForm.leader_id || null,
                       organisation_members: managingOrganization!.members.map(member => ({
                         member_id: member.member_id,
                         role: member.role,
@@ -638,11 +727,11 @@ export default function DepartmentsPage() {
                   });
 
                   if (response.error) {
-                    message.error(`Failed to update organization: ${response.error.message}`);
+                    showToast(`Failed to update organization: ${response.error.message}`, 'error');
                     return;
                   }
 
-                  message.success('Organization updated successfully!');
+                  showToast('Organization updated successfully!', 'success');
                   setShowManageModal(false);
                   setManagingOrganization(null);
                   
@@ -650,7 +739,7 @@ export default function DepartmentsPage() {
                   await fetchOrganizations();
                 } catch (error) {
                   console.error('Error updating organization:', error);
-                  message.error('Failed to update organization');
+                  showToast('Failed to update organization', 'error');
                 }
               }}
               className="space-y-4"
@@ -681,6 +770,32 @@ export default function DepartmentsPage() {
                   placeholder="Organization description"
                 />
               </div>
+              
+              {/* Organization Leader Selection */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Organization Leader
+                </label>
+                <select
+                  value={manageForm.leader_id || ''}
+                  onChange={(e) => setManageForm({ 
+                    ...manageForm, 
+                    leader_id: e.target.value ? parseInt(e.target.value) : null 
+                  })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                >
+                  <option value="">No Leader Selected</option>
+                  {managingOrganization.members.map(member => (
+                    <option key={member.member_id} value={member.member_id}>
+                      {getMemberName(member.member_id)} ({member.role})
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-gray-500 mt-1">
+                  Select a member from this organization to be the leader
+                </p>
+              </div>
+              
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Status *
@@ -695,6 +810,67 @@ export default function DepartmentsPage() {
                   <option value="inactive">Inactive</option>
                 </select>
               </div>
+              
+              {/* Current Members List */}
+              <div className="mt-6">
+                <h4 className="text-sm font-medium text-gray-700 mb-3">Current Members</h4>
+                {managingOrganization.members && managingOrganization.members.length > 0 ? (
+                  <div className="space-y-2 max-h-40 overflow-y-auto border border-gray-200 rounded-lg p-3">
+                    {managingOrganization.members.map(member => (
+                      <div 
+                        key={member.member_id} 
+                        className={`flex items-center justify-between p-2 rounded-md ${
+                          manageForm.leader_id === member.member_id 
+                            ? 'bg-green-50 border border-green-200' 
+                            : 'bg-gray-50'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium text-gray-900">
+                            {getMemberName(member.member_id)}
+                          </span>
+                          <Tag color="blue" className="text-xs">
+                            {member.role}
+                          </Tag>
+                          {manageForm.leader_id === member.member_id && (
+                            <Tag color="gold" className="text-xs">
+                              Leader
+                            </Tag>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-gray-500">
+                            Joined: {new Date(member.joined_at).toLocaleDateString()}
+                          </span>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant={manageForm.leader_id === member.member_id ? "outline" : "default"}
+                            onClick={() => {
+                              if (manageForm.leader_id === member.member_id) {
+                                // Remove leader if already selected
+                                setManageForm({ ...manageForm, leader_id: null });
+                              } else {
+                                // Set as leader
+                                setManageForm({ ...manageForm, leader_id: member.member_id });
+                              }
+                            }}
+                            className="text-xs px-2 py-1"
+                          >
+                            {manageForm.leader_id === member.member_id ? 'Remove Leader' : 'Make Leader'}
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-4 text-gray-500 border border-gray-200 rounded-lg">
+                    <HiOutlineUsers className="h-8 w-8 mx-auto mb-2 text-gray-400" />
+                    <p className="text-sm">No members in this organization</p>
+                  </div>
+                )}
+              </div>
+              
               <div className="flex gap-3 pt-4 border-t border-gray-200">
                 <Button
                   type="button"

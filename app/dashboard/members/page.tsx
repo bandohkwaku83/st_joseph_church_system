@@ -128,8 +128,14 @@ export default function MembersPage() {
     membership_status: string;
     date_joined_society: string;
     transferred_from_another_society: boolean;
+    former_society?: string;
     baptised: boolean;
+    date_of_baptism?: string;
+    place_of_baptism?: string;
     confirmed: boolean;
+    date_of_confirmation?: string;
+    place_of_confirmation?: string;
+    natal_group?: string;
     occupation: string;
     place_of_work_or_school: string;
     skills_or_talent: string;
@@ -206,8 +212,13 @@ export default function MembersPage() {
       membershipStatus: membershipStatus,
       dateJoinedSociety: backendMember.date_joined_society,
       transferredFromAnotherSociety: backendMember.transferred_from_another_society,
+      formerSocietyName: backendMember.former_society,
       baptised: backendMember.baptised,
+      baptismDate: backendMember.date_of_baptism,
+      baptismPlace: backendMember.place_of_baptism,
       confirmed: backendMember.confirmed,
+      confirmationDate: backendMember.date_of_confirmation,
+      confirmationPlace: backendMember.place_of_confirmation,
       occupation: backendMember.occupation,
       placeOfWork: backendMember.place_of_work_or_school,
       skillsTalents: backendMember.skills_or_talent,
@@ -305,13 +316,26 @@ export default function MembersPage() {
     setShowModal(true);
     setCurrentStep(0);
     
-    // Populate form with existing member data
+    // Calculate age from date of birth if available
+    let calculatedAge: number | undefined;
+    if (member.dateOfBirth) {
+      const today = new Date();
+      const birthDate = new Date(member.dateOfBirth);
+      calculatedAge = today.getFullYear() - birthDate.getFullYear();
+      const monthDiff = today.getMonth() - birthDate.getMonth();
+      if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+        calculatedAge--;
+      }
+    }
+    
+    // Populate form with existing member data (including calculated age)
     form.setFieldsValue({
       profileImage: member.profileImage,
       surname: member.surname,
       otherNames: member.otherNames,
       gender: member.gender,
       dateOfBirth: member.dateOfBirth ? dayjs(member.dateOfBirth) : undefined,
+      age: calculatedAge,
       maritalStatus: member.maritalStatus,
       nationality: member.nationality,
       hometown: member.hometown,
@@ -340,18 +364,6 @@ export default function MembersPage() {
       confirmationPlace: member.confirmationPlace,
     });
 
-    // Calculate and set age automatically from date of birth
-    if (member.dateOfBirth) {
-      const today = new Date();
-      const birthDate = new Date(member.dateOfBirth);
-      let age = today.getFullYear() - birthDate.getFullYear();
-      const monthDiff = today.getMonth() - birthDate.getMonth();
-      if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
-        age--;
-      }
-      form.setFieldValue('age', age);
-    }
-
     // Set profile image preview if exists
     if (member.profileImage) {
       setProfileImagePreview(member.profileImage);
@@ -368,15 +380,17 @@ export default function MembersPage() {
     form.resetFields();
   };
 
-  const filteredMembers = members.filter((member) => {
-    const searchLower = searchTerm.toLowerCase();
-    return (
-      member.name.toLowerCase().includes(searchLower) ||
-      member.email.toLowerCase().includes(searchLower) ||
-      member.department.toLowerCase().includes(searchLower) ||
-      member.churchNumber?.toLowerCase().includes(searchLower)
-    );
-  });
+  const filteredMembers = members
+    .filter((member) => {
+      const searchLower = searchTerm.toLowerCase();
+      return (
+        member.name.toLowerCase().includes(searchLower) ||
+        member.email.toLowerCase().includes(searchLower) ||
+        member.department.toLowerCase().includes(searchLower) ||
+        member.churchNumber?.toLowerCase().includes(searchLower)
+      );
+    })
+    .sort((a, b) => b.id - a.id); // Sort by ID descending (latest first)
 
   // Calculate stats from members data
   const total = loading ? 0 : members.length;
@@ -716,8 +730,14 @@ export default function MembersPage() {
                     membership_status: values.membershipStatus?.toLowerCase().replace(' ', '_') || 'full_member',
                     date_joined_society: formatDate(values.dateJoinedSociety) || '',
                     transferred_from_another_society: values.transferredFromAnotherSociety || false,
+                    natal_group: values.natalGroup?.toLowerCase() || '',
                     baptised: values.baptised || false,
+                    date_of_baptism: values.baptised ? formatDate(values.baptismDate) : undefined,
+                    place_of_baptism: values.baptised ? (values.baptismPlace || '') : undefined,
                     confirmed: values.confirmed || false,
+                    date_of_confirmation: values.confirmed ? formatDate(values.confirmationDate) : undefined,
+                    place_of_confirmation: values.confirmed ? (values.confirmationPlace || '') : undefined,
+                    former_society: values.transferredFromAnotherSociety ? (values.formerSocietyName || '') : undefined,
                     occupation: values.occupation || '',
                     place_of_work_or_school: values.placeOfWork || '',
                     skills_or_talent: values.skillsTalents || '',
@@ -921,31 +941,6 @@ export default function MembersPage() {
                     </Form.Item>
                   </Col>
                 </Row>
-                <Form.Item
-                  label="Date of Birth"
-                  name="dateOfBirth"
-                  rules={[{ required: true, message: 'Please select date of birth' }]}
-                >
-                  <DatePicker 
-                    style={{ width: '100%' }} 
-                    size="large" 
-                    format="DD/MM/YYYY"
-                    onChange={(date) => {
-                      // Auto-calculate age when date of birth changes
-                      if (date) {
-                        const today = new Date();
-                        const birthDate = date.toDate();
-                        let age = today.getFullYear() - birthDate.getFullYear();
-                        const monthDiff = today.getMonth() - birthDate.getMonth();
-                        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
-                          age--;
-                        }
-                        // Update the age field in the form (for internal use, not displayed)
-                        form.setFieldValue('age', age);
-                      }
-                    }}
-                  />
-                </Form.Item>
 
                 <Form.Item
                   label="Natal Group (Day Born)"
@@ -1451,9 +1446,15 @@ export default function MembersPage() {
                   />
                   <InfoRow 
                     label="Transferred from Another Society" 
-                    value={selectedMember.transferredFromAnotherSociety !== undefined ? selectedMember.transferredFromAnotherSociety : undefined} 
+                    value={selectedMember.transferredFromAnotherSociety !== undefined ? (selectedMember.transferredFromAnotherSociety ? 'Yes' : 'No') : undefined} 
                   />
                   <InfoRow label="Former Society Name" value={selectedMember.formerSocietyName} />
+                  <InfoRow 
+                    label="Organizations" 
+                    value={selectedMember.organisations && selectedMember.organisations.length > 0 ? selectedMember.organisations.join(', ') : undefined} 
+                    breakWords 
+                  />
+                  <InfoRow label="Other Organization" value={selectedMember.otherOrganisation} />
                 </CardContent>
               </Card>
 
@@ -1468,7 +1469,7 @@ export default function MembersPage() {
                 <CardContent className="space-y-3">
                   <InfoRow 
                     label="Baptised" 
-                    value={selectedMember.baptised !== undefined ? selectedMember.baptised : undefined} 
+                    value={selectedMember.baptised !== undefined ? (selectedMember.baptised ? 'Yes' : 'No') : undefined} 
                   />
                   <InfoRow 
                     label="Date of Baptism" 
@@ -1489,7 +1490,7 @@ export default function MembersPage() {
                 <CardContent className="space-y-3">
                   <InfoRow 
                     label="Confirmed" 
-                    value={selectedMember.confirmed !== undefined ? selectedMember.confirmed : undefined} 
+                    value={selectedMember.confirmed !== undefined ? (selectedMember.confirmed ? 'Yes' : 'No') : undefined} 
                   />
                   <InfoRow 
                     label="Date of Confirmation" 

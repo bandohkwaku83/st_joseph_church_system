@@ -48,14 +48,25 @@ export async function apiFetch(
     url = `${base}${endpoint}`;
   }
   
+  // Prepare headers with automatic Bearer token inclusion
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(options.headers as Record<string, string> || {}),
+  };
+  
+  // Automatically include Bearer token if available (unless already provided in headers)
+  if (typeof window !== 'undefined' && !headers.Authorization) {
+    const token = localStorage.getItem('auth_token');
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+  }
+  
   try {
     const response = await fetch(url, {
       ...options,
       credentials: options.credentials ?? 'include',
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers,
-      },
+      headers,
     });
     
     return response;

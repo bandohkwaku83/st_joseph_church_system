@@ -404,6 +404,9 @@ export default function AttendancePage() {
                 <thead className="bg-gray-50">
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Date
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Service Type
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -426,33 +429,30 @@ export default function AttendancePage() {
                 <tbody className="bg-white divide-y divide-gray-200">
                   {attendanceRecords.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="px-6 py-4 text-center text-gray-500">
+                      <td colSpan={7} className="px-6 py-4 text-center text-gray-500">
                         No attendance records found
                       </td>
                     </tr>
                   ) : (
                     attendanceRecords.map((record) => (
                       <tr key={record.id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          <div className="flex items-center gap-2">
+                            <HiOutlineCalendar className="h-4 w-4 text-gray-500" />
+                            {dayjs(record.date).format('DD MMM YYYY')}
+                          </div>
+                        </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                           {record.service}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          <div className="flex items-center gap-2">
-                            <ManOutlined className="h-4 w-4 text-gray-500" />
-                            {record.men}
-                          </div>
+                          {record.men}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          <div className="flex items-center gap-2">
-                            <WomanOutlined className="h-4 w-4 text-gray-500" />
-                            {record.women}
-                          </div>
+                          {record.women}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          <div className="flex items-center gap-2">
-                            <UserOutlined className="h-4 w-4 text-gray-500" />
-                            {record.children}
-                          </div>
+                          {record.children}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-green-600">
                           {record.total}

@@ -124,8 +124,35 @@ function UsersAndRolesContent() {
     const firstRoleId = roles[0]?.id ?? '';
     setFormRoleId(firstRoleId);
     setFormNewRoleName('');
+    
+    // Set predefined permissions for the first role
     const firstRole = roles.find((r) => r.id === firstRoleId);
-    setFormMenuAccess(firstRole ? new Set(firstRole.permissionKeys) : new Set());
+    if (firstRole) {
+      let predefinedPermissions: Set<PermissionKey>;
+      
+      if (firstRole.name.toLowerCase().includes('church admin')) {
+        predefinedPermissions = new Set([
+          'dashboard', 'members', 'attendance', 'record_income', 
+          'expenditure', 'generate_report', 'welfare', 'communications', 
+          'organizations', 'assets_or_equipment', 'add_user', 'create_role'
+        ] as PermissionKey[]);
+      } else if (firstRole.name.toLowerCase().includes('head pastor')) {
+        predefinedPermissions = new Set([
+          'dashboard', 'welfare', 'generate_report', 'expenditure', 
+          'record_income', 'members', 'attendance'
+        ] as PermissionKey[]);
+      } else if (firstRole.name.toLowerCase().includes('financial')) {
+        predefinedPermissions = new Set([
+          'dashboard', 'welfare', 'generate_report', 'record_income', 'expenditure'
+        ] as PermissionKey[]);
+      } else {
+        predefinedPermissions = new Set(firstRole.permissionKeys);
+      }
+      
+      setFormMenuAccess(predefinedPermissions);
+    } else {
+      setFormMenuAccess(new Set());
+    }
   };
 
   const openEditUser = (id: string) => {
@@ -139,7 +166,34 @@ function UsersAndRolesContent() {
     setFormPassword('');
     setFormRoleId(u.roleId);
     setFormNewRoleName('');
-    setFormMenuAccess(role ? new Set(role.permissionKeys) : new Set());
+    
+    // Set predefined permissions based on role name
+    if (role) {
+      let predefinedPermissions: Set<PermissionKey>;
+      
+      if (role.name.toLowerCase().includes('church admin')) {
+        predefinedPermissions = new Set([
+          'dashboard', 'members', 'attendance', 'record_income', 
+          'expenditure', 'generate_report', 'welfare', 'communications', 
+          'organizations', 'assets_or_equipment', 'add_user', 'create_role'
+        ] as PermissionKey[]);
+      } else if (role.name.toLowerCase().includes('head pastor')) {
+        predefinedPermissions = new Set([
+          'dashboard', 'welfare', 'generate_report', 'expenditure', 
+          'record_income', 'members', 'attendance'
+        ] as PermissionKey[]);
+      } else if (role.name.toLowerCase().includes('financial')) {
+        predefinedPermissions = new Set([
+          'dashboard', 'welfare', 'generate_report', 'record_income', 'expenditure'
+        ] as PermissionKey[]);
+      } else {
+        predefinedPermissions = new Set(role.permissionKeys);
+      }
+      
+      setFormMenuAccess(predefinedPermissions);
+    } else {
+      setFormMenuAccess(new Set());
+    }
   };
 
   // Get the current user being edited to access their permissions
@@ -491,7 +545,34 @@ function UsersAndRolesContent() {
                       setFormMenuAccess(new Set());
                     } else {
                       const role = roles.find((r) => r.id === val);
-                      setFormMenuAccess(role ? new Set(role.permissionKeys) : new Set());
+                      if (role) {
+                        // Set predefined permissions based on role name
+                        let predefinedPermissions: Set<PermissionKey>;
+                        
+                        if (role.name.toLowerCase().includes('church admin')) {
+                          predefinedPermissions = new Set([
+                            'dashboard', 'members', 'attendance', 'record_income', 
+                            'expenditure', 'generate_report', 'welfare', 'communications', 
+                            'organizations', 'assets_or_equipment', 'add_user', 'create_role'
+                          ] as PermissionKey[]);
+                        } else if (role.name.toLowerCase().includes('head pastor')) {
+                          predefinedPermissions = new Set([
+                            'dashboard', 'welfare', 'generate_report', 'expenditure', 
+                            'record_income', 'members', 'attendance'
+                          ] as PermissionKey[]);
+                        } else if (role.name.toLowerCase().includes('financial')) {
+                          predefinedPermissions = new Set([
+                            'dashboard', 'welfare', 'generate_report', 'record_income', 'expenditure'
+                          ] as PermissionKey[]);
+                        } else {
+                          // For other roles, use their existing permissions
+                          predefinedPermissions = new Set(role.permissionKeys);
+                        }
+                        
+                        setFormMenuAccess(predefinedPermissions);
+                      } else {
+                        setFormMenuAccess(new Set());
+                      }
                     }
                   }}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
@@ -579,17 +660,22 @@ function UsersAndRolesContent() {
                         checked={formMenuAccess.has(key)}
                         onChange={() => toggleMenuAccess(key)}
                         disabled={
-                          key === 'create_role' &&
-                          isHeadPastorRole(selectedRole)
+                          !isCreatingNewRole || // Disable for existing roles
+                          (key === 'create_role' && isHeadPastorRole(selectedRole))
                         }
                         className="rounded border-gray-300 text-green-600 focus:ring-green-500 disabled:opacity-60"
                       />
-                      <span className="text-sm text-gray-700">
+                      <span className={`text-sm ${!isCreatingNewRole ? 'text-gray-500' : 'text-gray-700'}`}>
                         {PERMISSION_LABELS[key]}
                       </span>
                     </label>
                   ))}
                 </div>
+                {!isCreatingNewRole && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    Feature access is predefined for this role and cannot be modified.
+                  </p>
+                )}
                 {isHeadPastorRole(selectedRole) && (
                   <p className="text-xs text-gray-500 mt-1">
                     Head Pastor role always has &quot;Create Role&quot; and cannot be removed.

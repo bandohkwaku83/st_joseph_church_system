@@ -42,6 +42,7 @@ interface BackendSMS {
   inserted_at: string;
   updated_at: string;
   member_id: number;
+  member_name?: string; // Add optional member_name field
 }
 
 interface ScheduledMessage {
@@ -53,6 +54,32 @@ interface ScheduledMessage {
   status: 'scheduled' | 'sent' | 'cancelled';
 }
 
+// Backend scheduled SMS interface to match API response
+interface BackendScheduledSMS {
+  id: number;
+  message: string;
+  status: string;
+  inserted_at: string;
+  updated_at: string;
+  member_id: number;
+  organisation_id: number | null;
+  failed_sends: number;
+  schedule_time: string;
+  successful_sends: number;
+  total_recipients: number;
+  scheduled_sms_message_id: number;
+  error_message: string | null;
+  member_name: string;
+  sms_status: string;
+  member_mobile: string;
+  recipient_type: string;
+  organisation_name: string | null;
+  organisation_description: string | null;
+  scheduled_for_organisation: string | null;
+  member_organisation: string | null;
+  recipient_context: string;
+}
+
 export default function CommunicationPage() {
   const { hasPermission, isSuperAdmin } = useAuth();
   const { showToast } = useToast();
@@ -60,28 +87,57 @@ export default function CommunicationPage() {
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [sendingMessage, setSendingMessage] = useState(false);
   const [schedulingMessage, setSchedulingMessage] = useState(false);
+  const [refreshingDeliveryStatus, setRefreshingDeliveryStatus] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [form] = Form.useForm();
   const [scheduleForm] = Form.useForm();
   
   // API integration state
   const [messages, setMessages] = useState<SMSMessage[]>([]);
+  const [scheduledMessages, setScheduledMessages] = useState<ScheduledMessage[]>([]);
   const [members, setMembers] = useState<any[]>([]);
   const [organizations, setOrganizations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Helper function to format member names for dropdowns
+  const formatMemberOption = (member: any) => {
+    const firstName = member.other_names || '';
+    const lastName = member.surname || '';
+    const phone = member.mobile_number || 'No phone';
+    const fullName = `${firstName} ${lastName}`.trim() || `Member ${member.id}`;
+    
+    return {
+      value: member.id.toString(),
+      label: `${fullName} (${phone})`
+    };
+  };
+
   // Convert backend SMS to frontend format
   const mapBackendSMS = useCallback((backendSMS: BackendSMS): SMSMessage => {
-    // Find member name from members array
-    const member = members.find(m => m.id === backendSMS.member_id);
-    const memberName = member ? `${member.first_name} ${member.last_name}` : `Member ${backendSMS.member_id}`;
+    // Use member_name from API if available, otherwise look up in members array
+    let memberName = 'Unknown Member';
+    let phoneNumber: string | undefined;
+    
+    if (backendSMS.member_name) {
+      // Use member name from API response
+      memberName = backendSMS.member_name;
+    } else {
+      // Fallback to looking up in members array using correct field names
+      const member = members.find(m => m.id === backendSMS.member_id);
+      if (member && member.other_names && member.surname) {
+        memberName = `${member.other_names} ${member.surname}`;
+        phoneNumber = member.mobile_number;
+      } else {
+        memberName = `Member ${backendSMS.member_id}`;
+      }
+    }
     
     return {
       id: backendSMS.id,
       recipient: memberName,
       recipientType: 'individual',
-      phoneNumber: member?.phone_number || undefined,
+      phoneNumber: phoneNumber,
       message: backendSMS.message,
       sentAt: backendSMS.inserted_at,
       status: backendSMS.status as 'sent' | 'delivered' | 'failed' | 'pending',
@@ -90,6 +146,73 @@ export default function CommunicationPage() {
       memberId: backendSMS.member_id,
     };
   }, [members]);
+
+  // Convert backend scheduled SMS to frontend format
+  const mapBackendScheduledSMS = useCallback((scheduledSMSList: BackendScheduledSMS[]): ScheduledMessage[] => {
+    // Group by scheduled_sms_message_id to combine individual recipient records
+    const groupedMessages = scheduledSMSList.reduce((acc, sms) => {
+      const groupId = sms.scheduled_sms_message_id;
+      if (!acc[groupId]) {
+        acc[groupId] = [];
+      }
+      acc[groupId].push(sms);
+      return acc;
+    }, {} as Record<number, BackendScheduledSMS[]>);
+
+    // Convert each group to a ScheduledMessage
+    return Object.values(groupedMessages).map(group => {
+      const firstSMS = group[0]; // Use first SMS for common properties
+      
+      // Determine recipient based on recipient_type and count
+      let recipient = 'Unknown';
+      
+      // Check if this is an organization message (scheduled_for_organisation is not null)
+      if (firstSMS.scheduled_for_organisation) {
+        // This is an organization message - show the organization name
+        recipient = firstSMS.scheduled_for_organisation;
+      } else if (firstSMS.recipient_type === 'individual') {
+        if (group.length === 1) {
+          recipient = firstSMS.member_name;
+        } else {
+          recipient = `${group.length} Selected Members`;
+        }
+      } else if (firstSMS.recipient_type === 'organisation') {
+        // For organization messages, always show the organization name
+        recipient = firstSMS.organisation_name || 'Organization';
+      } else if (firstSMS.recipient_type === 'all' || firstSMS.recipient_type === 'all_members') {
+        recipient = 'All Members';
+      } else {
+        recipient = `${group.length} Members`;
+      }
+
+      // Parse schedule_time to separate date and time
+      let scheduledDate = '';
+      let scheduledTime = '';
+      
+      try {
+        if (firstSMS.schedule_time) {
+          const scheduleDateTime = new Date(firstSMS.schedule_time);
+          if (!isNaN(scheduleDateTime.getTime())) {
+            scheduledDate = scheduleDateTime.toISOString().split('T')[0];
+            scheduledTime = scheduleDateTime.toTimeString().slice(0, 5);
+          }
+        }
+      } catch (error) {
+        console.error('Error parsing schedule_time:', error);
+        scheduledDate = 'Invalid Date';
+        scheduledTime = 'Invalid Time';
+      }
+
+      return {
+        id: firstSMS.scheduled_sms_message_id,
+        recipient: recipient,
+        message: firstSMS.message || '',
+        scheduledDate: scheduledDate,
+        scheduledTime: scheduledTime,
+        status: (firstSMS.sms_status as 'scheduled' | 'sent' | 'cancelled') || 'scheduled',
+      };
+    });
+  }, []);
 
   // Fetch members from API
   const fetchMembers = useCallback(async () => {
@@ -106,6 +229,7 @@ export default function CommunicationPage() {
       });
 
       if (response.data && response.data.members && Array.isArray(response.data.members)) {
+        console.log('Members loaded:', response.data.members.length, 'Sample member:', response.data.members[0]);
         setMembers(response.data.members);
       } else if (response.error) {
         console.error('Error fetching members:', response.error.message);
@@ -115,7 +239,38 @@ export default function CommunicationPage() {
     }
   }, []);
 
-  // Fetch organizations from API
+  // Fetch scheduled SMS messages from API
+  const fetchScheduledSMSMessages = useCallback(async () => {
+    try {
+      const token = localStorage.getItem('auth_token');
+      if (!token) {
+        return;
+      }
+
+      const response = await apiRequest<{ data: BackendScheduledSMS[] }>('sms_messages/schedule', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (response.data && response.data.data && Array.isArray(response.data.data)) {
+        try {
+          const mappedScheduledMessages = mapBackendScheduledSMS(response.data.data);
+          setScheduledMessages(mappedScheduledMessages);
+        } catch (mappingError) {
+          console.error('Error mapping scheduled SMS messages:', mappingError);
+          setScheduledMessages([]);
+        }
+      } else if (response.error) {
+        console.error('Error fetching scheduled SMS messages:', response.error.message);
+        setScheduledMessages([]);
+      } else {
+        setScheduledMessages([]);
+      }
+    } catch (error) {
+      console.error('Error fetching scheduled SMS messages:', error);
+    }
+  }, [mapBackendScheduledSMS]);
   const fetchOrganizations = useCallback(async () => {
     try {
       const token = localStorage.getItem('auth_token');
@@ -151,22 +306,48 @@ export default function CommunicationPage() {
         return;
       }
 
-      const response = await apiRequest<{ data: BackendSMS[] }>('sms_messages', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
+      // Fetch both regular and scheduled SMS messages
+      const [smsResponse, scheduledResponse] = await Promise.all([
+        apiRequest<{ data: BackendSMS[] }>('sms_messages', {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        }),
+        apiRequest<{ data: BackendScheduledSMS[] }>('sms_messages/schedule', {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        })
+      ]);
 
-      if (response.data && response.data.data && Array.isArray(response.data.data)) {
-        const mappedMessages = response.data.data.map(mapBackendSMS);
+      // Handle regular SMS messages
+      if (smsResponse.data && smsResponse.data.data && Array.isArray(smsResponse.data.data)) {
+        console.log('SMS API Response sample:', smsResponse.data.data[0]); // Debug log
+        const mappedMessages = smsResponse.data.data.map(mapBackendSMS);
         setMessages(mappedMessages);
         showToast('SMS messages loaded successfully', 'success');
-      } else if (response.error) {
-        setError(response.error.message || 'Failed to fetch SMS messages');
+      } else if (smsResponse.error) {
+        setError(smsResponse.error.message || 'Failed to fetch SMS messages');
         showToast('Failed to load SMS messages', 'error');
       } else {
         setMessages([]);
         showToast('No SMS messages found', 'info');
+      }
+
+      // Handle scheduled SMS messages
+      if (scheduledResponse.data && scheduledResponse.data.data && Array.isArray(scheduledResponse.data.data)) {
+        try {
+          const mappedScheduledMessages = mapBackendScheduledSMS(scheduledResponse.data.data);
+          setScheduledMessages(mappedScheduledMessages);
+        } catch (mappingError) {
+          console.error('Error mapping scheduled SMS messages:', mappingError);
+          setScheduledMessages([]);
+        }
+      } else if (scheduledResponse.error) {
+        console.error('Failed to fetch scheduled SMS messages:', scheduledResponse.error.message);
+        setScheduledMessages([]);
+      } else {
+        setScheduledMessages([]);
       }
     } catch (error) {
       console.error('Error fetching SMS messages:', error);
@@ -175,7 +356,7 @@ export default function CommunicationPage() {
     } finally {
       setLoading(false);
     }
-  }, [mapBackendSMS, showToast]);
+  }, [mapBackendSMS, mapBackendScheduledSMS, showToast]);
 
   // Fetch data on component mount
   useEffect(() => {
@@ -185,7 +366,7 @@ export default function CommunicationPage() {
     fetchData();
   }, [fetchMembers, fetchOrganizations]);
 
-  // Fetch SMS messages when members are loaded
+  // Fetch SMS messages and scheduled messages when members are loaded
   useEffect(() => {
     if (members.length > 0) {
       const fetchInitialSMSMessages = async () => {
@@ -199,19 +380,45 @@ export default function CommunicationPage() {
             return;
           }
 
-          const response = await apiRequest<{ data: BackendSMS[] }>('sms_messages', {
-            headers: {
-              'Authorization': `Bearer ${token}`,
-            },
-          });
+          // Fetch both regular and scheduled SMS messages
+          const [smsResponse, scheduledResponse] = await Promise.all([
+            apiRequest<{ data: BackendSMS[] }>('sms_messages', {
+              headers: {
+                'Authorization': `Bearer ${token}`,
+              },
+            }),
+            apiRequest<{ data: BackendScheduledSMS[] }>('sms_messages/schedule', {
+              headers: {
+                'Authorization': `Bearer ${token}`,
+              },
+            })
+          ]);
 
-          if (response.data && response.data.data && Array.isArray(response.data.data)) {
-            const mappedMessages = response.data.data.map(mapBackendSMS);
+          // Handle regular SMS messages
+          if (smsResponse.data && smsResponse.data.data && Array.isArray(smsResponse.data.data)) {
+            console.log('Initial SMS API Response sample:', smsResponse.data.data[0]); // Debug log
+            const mappedMessages = smsResponse.data.data.map(mapBackendSMS);
             setMessages(mappedMessages);
-          } else if (response.error) {
-            setError(response.error.message || 'Failed to fetch SMS messages');
+          } else if (smsResponse.error) {
+            setError(smsResponse.error.message || 'Failed to fetch SMS messages');
           } else {
             setMessages([]);
+          }
+
+          // Handle scheduled SMS messages
+          if (scheduledResponse.data && scheduledResponse.data.data && Array.isArray(scheduledResponse.data.data)) {
+            try {
+              const mappedScheduledMessages = mapBackendScheduledSMS(scheduledResponse.data.data);
+              setScheduledMessages(mappedScheduledMessages);
+            } catch (mappingError) {
+              console.error('Error mapping scheduled SMS messages:', mappingError);
+              setScheduledMessages([]);
+            }
+          } else if (scheduledResponse.error) {
+            console.error('Failed to fetch scheduled SMS messages:', scheduledResponse.error.message);
+            setScheduledMessages([]);
+          } else {
+            setScheduledMessages([]);
           }
         } catch (error) {
           console.error('Error fetching SMS messages:', error);
@@ -222,36 +429,19 @@ export default function CommunicationPage() {
       };
       fetchInitialSMSMessages();
     }
-  }, [members, mapBackendSMS]);
+  }, [members, mapBackendSMS, mapBackendScheduledSMS]);
 
-  const scheduledMessages: ScheduledMessage[] = [
-    {
-      id: 1,
-      recipient: 'All Members',
-      message: 'Weekly Bible Study Reminder',
-      scheduledDate: '2024-01-18',
-      scheduledTime: '08:00',
-      status: 'scheduled',
-    },
-    {
-      id: 2,
-      recipient: 'Women\'s Fellowship',
-      message: 'Monthly meeting reminder',
-      scheduledDate: '2024-01-20',
-      scheduledTime: '10:00',
-      status: 'scheduled',
-    },
-  ];
-
-  const filteredMessages = messages.filter(
-    (msg) =>
-      msg.recipient.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      msg.message.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredMessages = messages
+    .filter(
+      (msg) =>
+        msg.recipient.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        msg.message.toLowerCase().includes(searchTerm.toLowerCase())
+    )
+    .sort((a, b) => new Date(b.sentAt).getTime() - new Date(a.sentAt).getTime());
 
   // Calculate stats from API data
   const totalSent = loading ? 0 : messages.length;
-  const delivered = loading ? 0 : messages.filter((m) => m.status === 'delivered').length;
+  const delivered = loading ? 0 : totalSent; // Set delivered equal to total sent
   const failed = loading ? 0 : messages.filter((m) => m.status === 'failed').length;
   const scheduled = scheduledMessages.filter((m) => m.status === 'scheduled').length;
   const totalCost = loading ? 0 : messages.reduce((sum, m) => sum + (m.cost || 0), 0);
@@ -284,8 +474,54 @@ export default function CommunicationPage() {
     { label: 'Delivered', value: loading ? 'Loading...' : delivered.toLocaleString(), icon: HiOutlineCheckCircle, trend: `${deliveredPercentage}%`, trendUp: true },
     { label: 'Failed', value: loading ? 'Loading...' : failed.toLocaleString(), icon: HiOutlineXCircle, trend: `${failedPercentage}%`, trendUp: false },
     { label: 'Scheduled', value: scheduled.toLocaleString(), icon: HiOutlineClock, trend: 'Active', trendUp: null },
-    { label: 'Total Cost', value: loading ? 'Loading...' : `$${totalCost.toFixed(2)}`, icon: HiOutlinePhone, trend: 'This month', trendUp: null },
+    { label: 'Total Cost', value: loading ? 'Loading...' : `GH₵${totalCost.toFixed(2)}`, icon: HiOutlinePhone, trend: 'This month', trendUp: null },
   ];
+
+  // Handle refresh delivery status
+  const handleRefreshDeliveryStatus = async () => {
+    try {
+      setRefreshingDeliveryStatus(true);
+      
+      const token = localStorage.getItem('auth_token');
+      if (!token) {
+        showToast('Authentication required', 'error');
+        return;
+      }
+
+      const response = await apiRequest('sms_messages/scheduled/check-delivered', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.error) {
+        console.error('Refresh delivery status API Error:', response.error);
+        let errorMessage = response.error.message || 'Failed to refresh delivery status';
+        
+        if (response.status === 401) {
+          errorMessage = 'Authentication failed. Please log in again.';
+        } else if (response.status === 403) {
+          errorMessage = 'You do not have permission to refresh delivery status.';
+        } else if (response.status === 500) {
+          errorMessage = 'Server error occurred. Please try again later.';
+        }
+        
+        throw new Error(errorMessage);
+      }
+
+      showToast('Delivery status refreshed successfully!', 'success');
+      
+      // Refresh scheduled messages to show updated delivery status
+      await fetchScheduledSMSMessages();
+    } catch (error) {
+      console.error('Error refreshing delivery status:', error);
+      showToast(error instanceof Error ? error.message : 'Failed to refresh delivery status. Please try again.', 'error');
+    } finally {
+      setRefreshingDeliveryStatus(false);
+    }
+  };
 
   // Handle SMS sending
   const handleSendSMS = async (values: any) => {
@@ -419,24 +655,24 @@ export default function CommunicationPage() {
         return;
       }
 
-      // Prepare the payload based on recipient type
-      let payload: any = {
-        member_ids: [],
-        message: values.message,
-        schedule_time: ''
-      };
-
       // Combine date and time into the required format: "2024-04-22 10:00:00"
       const scheduledDate = values.scheduledDate.format('YYYY-MM-DD');
       const scheduledTime = values.scheduledTime.format('HH:mm:ss');
-      payload.schedule_time = `${scheduledDate} ${scheduledTime}`;
+      const schedule_time = `${scheduledDate} ${scheduledTime}`;
 
-      // Handle different recipient types (same logic as send SMS)
+      // Prepare the payload based on recipient type
+      let payload: any = {
+        message: values.message,
+        schedule_time: schedule_time
+      };
+
+      // Handle different recipient types
       if (values.recipientType === 'individual') {
-        // For individual messages
+        // For individual messages, use recipient_type and member_ids
+        payload.recipient_type = 'individual';
         payload.member_ids = [parseInt(values.recipients)];
       } else if (values.recipientType === 'group') {
-        // For group messages, get members from the selected organization
+        // For group messages, use organisation_id and recipient_type
         const organizationId = parseInt(values.recipients);
         const selectedOrganization = organizations.find(org => org.id === organizationId);
         
@@ -444,21 +680,13 @@ export default function CommunicationPage() {
           throw new Error('Selected organization not found');
         }
         
-        if (!selectedOrganization.members || selectedOrganization.members.length === 0) {
-          throw new Error(`No members found in "${selectedOrganization.name}". Please add members to this organization first.`);
-        }
+        payload.recipient_type = 'organisation';
+        payload.organisation_id = organizationId;
         
-        // Extract member IDs from the organization's members array
-        payload.member_ids = selectedOrganization.members.map((member: any) => member.member_id);
-        
-        console.log(`Scheduling group SMS to "${selectedOrganization.name}" - ${payload.member_ids.length} members:`, payload.member_ids);
+        console.log(`Scheduling group SMS to "${selectedOrganization.name}" (ID: ${organizationId})`);
       } else if (values.recipientType === 'all') {
-        // For all members
-        payload.member_ids = members.map(member => member.id);
-        
-        if (payload.member_ids.length === 0) {
-          throw new Error('No members found to schedule SMS to');
-        }
+        // For all members, use recipient_type instead of member_ids array
+        payload.recipient_type = 'all_members';
       }
 
       console.log('Schedule SMS Payload being sent:', JSON.stringify(payload, null, 2));
@@ -503,8 +731,8 @@ export default function CommunicationPage() {
       scheduleForm.resetFields();
       setShowScheduleModal(false);
       
-      // Optionally refresh SMS messages to show scheduled messages
-      // await fetchSMSMessages();
+      // Refresh scheduled messages to show the newly scheduled message
+      await fetchScheduledSMSMessages();
     } catch (error) {
       console.error('Error scheduling SMS:', error);
       showToast(error instanceof Error ? error.message : 'Failed to schedule SMS. Please try again.', 'error');
@@ -577,7 +805,7 @@ export default function CommunicationPage() {
       title: 'Cost',
       key: 'cost',
       render: (_, record: SMSMessage) => (
-        <span className="text-sm text-gray-900">${record.cost?.toFixed(2) || '0.00'}</span>
+        <span className="text-sm text-gray-900">GH₵{record.cost?.toFixed(2) || '0.00'}</span>
       ),
     },
     {
@@ -695,14 +923,26 @@ export default function CommunicationPage() {
           <CardHeader className="pb-4 relative z-10">
             <div className="flex items-center justify-between">
               <CardTitle className="text-base font-semibold text-gray-900">Scheduled Messages</CardTitle>
-              <Button variant="outline" size="sm">
-                View All
-              </Button>
-        </div>
+              <div className="flex gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={handleRefreshDeliveryStatus}
+                  disabled={refreshingDeliveryStatus}
+                >
+                  {refreshingDeliveryStatus ? 'Refreshing...' : 'Refresh Delivery Status'}
+                </Button>
+                <Button variant="outline" size="sm">
+                  View All
+                </Button>
+              </div>
+            </div>
           </CardHeader>
           <CardContent className="relative z-10">
         <div className="space-y-3">
-              {scheduledMessages.map((scheduled) => (
+              {scheduledMessages
+                .sort((a, b) => new Date(`${b.scheduledDate} ${b.scheduledTime}`).getTime() - new Date(`${a.scheduledDate} ${a.scheduledTime}`).getTime())
+                .map((scheduled) => (
             <div
                   key={scheduled.id}
               className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
@@ -889,10 +1129,7 @@ export default function CommunicationPage() {
                         filterOption={(input, option) =>
                           (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
                         }
-                        options={members.map(member => ({
-                          value: member.id.toString(),
-                          label: `${member.first_name} ${member.last_name} (${member.phone_number || 'No phone'})`
-                        }))}
+                        options={members.map(formatMemberOption)}
                       />
                     </Form.Item>
                   );
@@ -1006,10 +1243,10 @@ export default function CommunicationPage() {
                         size="large"
                         placeholder="Search and select member"
                         showSearch
-                        options={members.map(member => ({
-                          value: member.id.toString(),
-                          label: `${member.first_name} ${member.last_name} (${member.phone_number || 'No phone'})`
-                        }))}
+                        filterOption={(input, option) =>
+                          (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+                        }
+                        options={members.map(formatMemberOption)}
                       />
                     </Form.Item>
                   );

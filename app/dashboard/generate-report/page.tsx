@@ -1,23 +1,17 @@
 'use client';
 
-import { useMemo, useState, useCallback } from 'react';
+import { useMemo, useState, useCallback, useEffect } from 'react';
 import dayjs, { type Dayjs } from 'dayjs';
 import { Tabs, Table, DatePicker, Select, Space, Tag, Alert } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { HiOutlineDownload } from 'react-icons/hi';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { useAuth } from '@/lib/auth-context';
+import { useToast } from '@/lib/toast-context';
+import { apiRequest, getApiBase } from '@/lib/api';
 
 const MONTHLY_DUES_GHC = 50;
-
-const ROSTER = [
-  { id: 1, churchNumber: 'CH-0001', name: 'Kwame Asante' },
-  { id: 2, churchNumber: 'CH-0002', name: 'Ama Mensah' },
-  { id: 3, churchNumber: 'CH-0003', name: 'Kofi Osei' },
-  { id: 4, churchNumber: 'CH-0004', name: 'Akosua Adjei' },
-  { id: 5, churchNumber: 'CH-0005', name: 'Efua Boateng' },
-  { id: 6, churchNumber: 'CH-0006', name: 'Yaw Appiah' },
-] as const;
 
 interface WelfarePaymentRow {
   id: string;
@@ -30,8 +24,43 @@ interface WelfarePaymentRow {
   method: string;
 }
 
+interface Member {
+  id: number;
+  churchNumber: string;
+  name: string;
+}
+
+interface BackendWelfare {
+  id: number;
+  month: number;
+  year: number;
+  amount: number;
+  member_id: number;
+  payment_date: string;
+  payment_method: string;
+  member_name: string;
+  member_parish_number: string;
+}
+
+interface BackendMember {
+  id: number;
+  other_names: string;
+  surname: string;
+  parish_number: string;
+}
+
+interface BackendAttendance {
+  id: number;
+  date: string;
+  men: number;
+  women: number;
+  children: number;
+  total: number;
+  created_at: string;
+}
+
 /** Demo ledger — same idea as Welfare/Dues (monthly GHC 50 target per member) */
-const INITIAL_WELFARE_PAYMENTS: WelfarePaymentRow[] = [
+const FALLBACK_WELFARE_PAYMENTS: WelfarePaymentRow[] = [
   { id: '1', memberId: 1, memberName: 'Kwame Asante', year: 2026, month: 4, amount: 50, paymentDate: '2026-04-14', method: 'Cash' },
   { id: '2', memberId: 2, memberName: 'Ama Mensah', year: 2026, month: 4, amount: 50, paymentDate: '2026-04-13', method: 'Mobile Money' },
   { id: '3', memberId: 4, memberName: 'Akosua Adjei', year: 2026, month: 4, amount: 25, paymentDate: '2026-04-10', method: 'Bank Transfer' },
@@ -61,13 +90,6 @@ const MONTHLY_ATTENDANCE_2026: { year: number; month: number; total: number }[] 
   { year: 2026, month: 3, total: 830 },
   { year: 2026, month: 4, total: 810 },
   { year: 2026, month: 5, total: 785 },
-];
-
-const WEEKLY_ATTENDANCE: { weekStart: string; label: string; total: number }[] = [
-  { weekStart: '2026-04-14', label: 'Week of 14 Apr 2026', total: 198 },
-  { weekStart: '2026-04-07', label: 'Week of 7 Apr 2026', total: 202 },
-  { weekStart: '2026-03-31', label: 'Week of 31 Mar 2026', total: 195 },
-  { weekStart: '2026-03-24', label: 'Week of 24 Mar 2026', total: 188 },
 ];
 
 function monthKey(y: number, m: number) {
@@ -113,9 +135,150 @@ function monthName(m: number) {
 }
 
 export default function GenerateReportPage() {
-  const [welfarePayments] = useState<WelfarePaymentRow[]>(INITIAL_WELFARE_PAYMENTS);
+  const { user } = useAuth();
+  const { showToast } = useToast();
+  
+  // API data state
+  const [welfares, setWelfares] = useState<BackendWelfare[]>([]);
+  const [members, setMembers] = useState<BackendMember[]>([]);
+  const [attendances, setAttendances] = useState<BackendAttendance[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Report state
   const [welfareFrom, setWelfareFrom] = useState<Dayjs>(() => dayjs('2026-01-01'));
   const [welfareTo, setWelfareTo] = useState<Dayjs>(() => dayjs('2026-04-01'));
+
+  // Fetch welfares from API
+  const fetchWelfares = useCallback(async () => {
+    try {
+      const token = localStorage.getItem('auth_token');
+      if (!token) {
+        console.warn('No auth token found, skipping welfares fetch');
+        return;
+      }
+
+      const response = await apiRequest<{ data: BackendWelfare[] }>('welfares', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (response.data && response.data.data && Array.isArray(response.data.data)) {
+        setWelfares(response.data.data);
+      } else if (response.error) {
+        console.error('Error fetching welfares:', response.error.message);
+        setError(`Failed to load welfares: ${response.error.message}`);
+      }
+    } catch (error) {
+      console.error('Error fetching welfares:', error);
+      setError('Network error occurred while fetching welfares');
+    }
+  }, []);
+
+  // Fetch attendances from API
+  const fetchAttendances = useCallback(async () => {
+    try {
+      const token = localStorage.getItem('auth_token');
+      if (!token) {
+        console.warn('No auth token found, skipping attendances fetch');
+        return;
+      }
+
+      const response = await apiRequest<{ attendances: BackendAttendance[] }>('attendances', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (response.data && response.data.attendances && Array.isArray(response.data.attendances)) {
+        setAttendances(response.data.attendances);
+      } else if (response.error) {
+        console.error('Error fetching attendances:', response.error.message);
+        // Don't set error for attendances since it might be a permission issue
+        console.warn('Attendances data not available, using fallback data');
+      }
+    } catch (error) {
+      console.error('Error fetching attendances:', error);
+      console.warn('Attendances data not available, using fallback data');
+    }
+  }, []);
+  const fetchMembers = useCallback(async () => {
+    try {
+      const token = localStorage.getItem('auth_token');
+      if (!token) {
+        console.warn('No auth token found, skipping members fetch');
+        return;
+      }
+
+      const response = await apiRequest<{ members: BackendMember[] }>('members', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (response.data && response.data.members && Array.isArray(response.data.members)) {
+        setMembers(response.data.members);
+      } else if (response.error) {
+        console.error('Error fetching members:', response.error.message);
+        // Don't set error for members since it might be a permission issue
+        console.warn('Members data not available, using welfare data only');
+      }
+    } catch (error) {
+      console.error('Error fetching members:', error);
+      console.warn('Members data not available, using welfare data only');
+    }
+  }, []);
+
+  // Fetch data on component mount
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true);
+      await Promise.all([fetchWelfares(), fetchMembers(), fetchAttendances()]);
+      setLoading(false);
+    };
+    fetchData();
+  }, [fetchWelfares, fetchMembers, fetchAttendances]);
+
+  // Convert API data to report format
+  const welfarePayments = useMemo(() => {
+    if (welfares.length > 0) {
+      return welfares.map((welfare): WelfarePaymentRow => ({
+        id: welfare.id.toString(),
+        memberId: welfare.member_id,
+        memberName: welfare.member_name,
+        year: welfare.year,
+        month: welfare.month,
+        amount: parseFloat(welfare.amount.toString()),
+        paymentDate: welfare.payment_date,
+        method: welfare.payment_method,
+      }));
+    }
+    
+    // Fallback to demo data if API not available
+    return FALLBACK_WELFARE_PAYMENTS;
+  }, [welfares]);
+
+  // Convert members data to roster format
+  const roster = useMemo((): Member[] => {
+    if (members.length > 0) {
+      return members.map((member): Member => ({
+        id: member.id,
+        churchNumber: member.parish_number || `CH-${member.id.toString().padStart(4, '0')}`,
+        name: `${member.other_names} ${member.surname}`.trim() || 'Unknown Member',
+      }));
+    }
+    
+    // Fallback roster if members API not available
+    return [
+      { id: 1, churchNumber: 'CH-0001', name: 'Kwame Asante' },
+      { id: 2, churchNumber: 'CH-0002', name: 'Ama Mensah' },
+      { id: 3, churchNumber: 'CH-0003', name: 'Kofi Osei' },
+      { id: 4, churchNumber: 'CH-0004', name: 'Akosua Adjei' },
+      { id: 5, churchNumber: 'CH-0005', name: 'Efua Boateng' },
+      { id: 6, churchNumber: 'CH-0006', name: 'Yaw Appiah' },
+    ];
+  }, [members]);
 
   const welfareReport = useMemo(() => {
     const a = welfareFrom.startOf('month');
@@ -128,7 +291,7 @@ export default function GenerateReportPage() {
     const months = enumerateMonths(fromY, fromM, toY, toM);
     const monthCount = months.length;
     const expectedPerMember = MONTHLY_DUES_GHC * monthCount;
-    const expectedTotal = ROSTER.length * expectedPerMember;
+    const expectedTotal = roster.length * expectedPerMember;
 
     const inRange = (p: WelfarePaymentRow) =>
       months.some((mo) => mo.year === p.year && mo.month === p.month);
@@ -136,7 +299,7 @@ export default function GenerateReportPage() {
     const filtered = welfarePayments.filter(inRange);
     const totalCollected = filtered.reduce((s, p) => s + p.amount, 0);
 
-    const byMember = ROSTER.map((mem) => {
+    const byMember = roster.map((mem) => {
       const paid = filtered.filter((p) => p.memberId === mem.id).reduce((s, p) => s + p.amount, 0);
       const outstanding = Math.max(0, expectedPerMember - paid);
       return {
@@ -154,7 +317,7 @@ export default function GenerateReportPage() {
         key: `${mo.year}-${mo.month}`,
         label: `${monthName(mo.month)} ${mo.year}`,
         collected: mTotal,
-        expected: ROSTER.length * MONTHLY_DUES_GHC,
+        expected: roster.length * MONTHLY_DUES_GHC,
       };
     });
 
@@ -172,7 +335,7 @@ export default function GenerateReportPage() {
         (a, b) => new Date(b.paymentDate).getTime() - new Date(a.paymentDate).getTime()
       ),
     };
-  }, [welfarePayments, welfareFrom, welfareTo]);
+  }, [welfarePayments, welfareFrom, welfareTo, roster]);
 
   const exportWelfareCsv = useCallback(() => {
     const header = ['Parish Number', 'Member Name', 'Paid (GHC)', 'Outstanding (GHC)', 'Status'];
@@ -240,9 +403,95 @@ export default function GenerateReportPage() {
   const [attWeekIndex, setAttWeekIndex] = useState(0);
   const [compareMode, setCompareMode] = useState<'previous' | 'none'>('previous');
 
+  // Convert API attendance data to weekly totals
+  const weeklyTotals = useMemo(() => {
+    if (attendances.length > 0) {
+      const weeks: { weekStart: string; label: string; total: number }[] = [];
+      const weekMap: { [key: string]: number } = {};
+      
+      attendances.forEach(attendance => {
+        const date = new Date(attendance.date);
+        
+        // Skip invalid dates
+        if (isNaN(date.getTime())) {
+          console.warn('Invalid date found in attendance record:', attendance.date);
+          return;
+        }
+        
+        const weekStart = new Date(date);
+        weekStart.setDate(date.getDate() - date.getDay()); // Get Sunday of the week
+        const weekKey = weekStart.toISOString().split('T')[0];
+        
+        if (!weekMap[weekKey]) {
+          weekMap[weekKey] = 0;
+        }
+        weekMap[weekKey] += attendance.total;
+      });
+      
+      // Convert to array and sort by date (newest first)
+      Object.entries(weekMap).forEach(([weekStart, total]) => {
+        const date = new Date(weekStart);
+        weeks.push({
+          weekStart,
+          label: `Week of ${date.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}`,
+          total
+        });
+      });
+      
+      return weeks.sort((a, b) => new Date(b.weekStart).getTime() - new Date(a.weekStart).getTime()).slice(0, 10);
+    }
+    
+    // Fallback to hardcoded data
+    return [
+      { weekStart: '2026-04-14', label: 'Week of 14 Apr 2026', total: 198 },
+      { weekStart: '2026-04-07', label: 'Week of 7 Apr 2026', total: 202 },
+      { weekStart: '2026-03-31', label: 'Week of 31 Mar 2026', total: 195 },
+      { weekStart: '2026-03-24', label: 'Week of 24 Mar 2026', total: 188 },
+    ];
+  }, [attendances]);
+
+  // Convert API attendance data to monthly totals
+  const monthlyTotals = useMemo(() => {
+    if (attendances.length > 0) {
+      const totals: { [key: string]: number } = {};
+      
+      attendances.forEach(attendance => {
+        const date = new Date(attendance.date);
+        
+        // Skip invalid dates
+        if (isNaN(date.getTime())) {
+          console.warn('Invalid date found in attendance record:', attendance.date);
+          return;
+        }
+        
+        const year = date.getFullYear();
+        const month = date.getMonth() + 1; // Convert to 1-based month
+        const key = `${year}-${month}`;
+        
+        if (!totals[key]) {
+          totals[key] = 0;
+        }
+        totals[key] += attendance.total;
+      });
+      
+      return totals;
+    }
+    
+    // Fallback to hardcoded data
+    return {
+      '2026-1': 780,
+      '2026-2': 805,
+      '2026-3': 830,
+      '2026-4': 810,
+      '2026-5': 785,
+    };
+  }, [attendances]);
+
   const attendanceReport = useMemo(() => {
-    const getMonthTotal = (y: number, m: number) =>
-      MONTHLY_ATTENDANCE_2026.find((x) => x.year === y && x.month === m)?.total ?? 0;
+    const getMonthTotal = (y: number, m: number) => {
+      const key = `${y}-${m}`;
+      return monthlyTotals[key] ?? 0;
+    };
 
     let primary = 0;
     let primaryLabel = '';
@@ -277,20 +526,29 @@ export default function GenerateReportPage() {
         compareLabel = `Q${pq} ${py}`;
       }
     } else if (attScope === 'year') {
-      primary = MONTHLY_ATTENDANCE_2026.filter((x) => x.year === attYear).reduce((s, x) => s + x.total, 0);
+      // Calculate year total from monthly totals
+      primary = 0;
+      for (let month = 1; month <= 12; month++) {
+        primary += getMonthTotal(attYear, month);
+      }
       primaryLabel = `${attYear}`;
       if (compareMode === 'previous') {
-        compare = MONTHLY_ATTENDANCE_2026.filter((x) => x.year === attYear - 1).reduce((s, x) => s + x.total, 0);
+        compare = 0;
+        for (let month = 1; month <= 12; month++) {
+          compare += getMonthTotal(attYear - 1, month);
+        }
         compareLabel = `${attYear - 1}`;
       }
     } else {
-      const w = WEEKLY_ATTENDANCE[attWeekIndex] ?? WEEKLY_ATTENDANCE[0];
-      primary = w.total;
-      primaryLabel = w.label;
-      if (compareMode === 'previous' && attWeekIndex + 1 < WEEKLY_ATTENDANCE.length) {
-        const w2 = WEEKLY_ATTENDANCE[attWeekIndex + 1];
-        compare = w2.total;
-        compareLabel = w2.label;
+      const w = weeklyTotals[attWeekIndex] ?? weeklyTotals[0];
+      if (w) {
+        primary = w.total;
+        primaryLabel = w.label;
+        if (compareMode === 'previous' && attWeekIndex + 1 < weeklyTotals.length) {
+          const w2 = weeklyTotals[attWeekIndex + 1];
+          compare = w2.total;
+          compareLabel = w2.label;
+        }
       }
     }
 
@@ -304,7 +562,7 @@ export default function GenerateReportPage() {
 
     const maxBar = Math.max(primary, compare, 1);
     return { primary, primaryLabel, compare, compareLabel, delta, insight, maxBar };
-  }, [attScope, attMonth, attQuarter, attYear, attWeekIndex, compareMode]);
+  }, [attScope, attMonth, attQuarter, attYear, attWeekIndex, compareMode, monthlyTotals, weeklyTotals]);
 
   const exportAttendanceCsv = useCallback(() => {
     const r = attendanceReport;
@@ -329,9 +587,42 @@ export default function GenerateReportPage() {
         </p>
       </div>
 
-      <Tabs
-        defaultActiveKey="welfare"
-        items={[
+      {/* Loading State */}
+      {loading && (
+        <Card className="border-gray-200 shadow-sm">
+          <CardContent className="p-6 text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p className="text-gray-600">Loading welfare and member data...</p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Error State */}
+      {error && !loading && (
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+          <div className="flex">
+            <div className="flex-shrink-0">
+              <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-yellow-800">
+                Data Loading Issue
+              </h3>
+              <div className="mt-2 text-sm text-yellow-700">
+                <p>Unable to load welfare data from the backend API. Error: {error}</p>
+                <p className="mt-1">Please check that the backend server is running at {getApiBase()}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {!loading && (
+        <Tabs
+          defaultActiveKey="welfare"
+          items={[
           {
             key: 'welfare',
             label: 'Welfare & dues',
@@ -387,7 +678,7 @@ export default function GenerateReportPage() {
                         GHC {welfareReport.expectedTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                       </p>
                       <p className="mt-1 text-xs text-gray-500">
-                        {ROSTER.length} members × GHC {MONTHLY_DUES_GHC} × {welfareReport.monthCount}
+                        {roster.length} members × GHC {MONTHLY_DUES_GHC} × {welfareReport.monthCount}
                       </p>
                     </CardContent>
                   </Card>
@@ -562,7 +853,7 @@ export default function GenerateReportPage() {
                             style={{ width: 260 }}
                             value={attWeekIndex}
                             onChange={setAttWeekIndex}
-                            options={WEEKLY_ATTENDANCE.map((w, i) => ({ value: i, label: w.label }))}
+                            options={weeklyTotals.map((w, i) => ({ value: i, label: w.label }))}
                           />
                         </div>
                       )}
@@ -648,6 +939,7 @@ export default function GenerateReportPage() {
           },
         ]}
       />
+      )}
     </div>
   );
 }

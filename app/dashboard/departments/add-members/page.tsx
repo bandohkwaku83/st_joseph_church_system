@@ -11,9 +11,10 @@ import {
 } from 'react-icons/hi';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input as AntInput, message, Spin, Checkbox, Tag } from 'antd';
+import { Input as AntInput, Spin, Checkbox, Tag } from 'antd';
 import { SearchOutlined, LoadingOutlined } from '@ant-design/icons';
 import { useAuth } from '@/lib/auth-context';
+import { useToast } from '@/lib/toast-context';
 import { apiRequest } from '@/lib/api';
 
 interface Member {
@@ -61,6 +62,7 @@ export default function AddMembersPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { hasPermission, isSuperAdmin } = useAuth();
+  const { showToast } = useToast();
   
   const orgId = searchParams.get('orgId');
   const orgName = searchParams.get('orgName');
@@ -95,7 +97,7 @@ export default function AddMembersPage() {
       const token = localStorage.getItem('auth_token');
       
       if (!token) {
-        message.error('No authentication token found');
+        showToast('No authentication token found', 'error');
         return;
       }
 
@@ -113,13 +115,13 @@ export default function AddMembersPage() {
 
       // Handle organization response
       if (orgResponse.error) {
-        message.error(`Failed to fetch organization: ${orgResponse.error.message}`);
+        showToast(`Failed to fetch organization: ${orgResponse.error.message}`, 'error');
         return;
       }
 
       const org = orgResponse.data?.organisations?.find(o => o.id === parseInt(orgId!));
       if (!org) {
-        message.error('Organization not found');
+        showToast('Organization not found', 'error');
         router.push('/dashboard/departments');
         return;
       }
@@ -127,7 +129,7 @@ export default function AddMembersPage() {
 
       // Handle members response
       if (membersResponse.error) {
-        message.error(`Failed to fetch members: ${membersResponse.error.message}`);
+        showToast(`Failed to fetch members: ${membersResponse.error.message}`, 'error');
         return;
       }
 
@@ -158,7 +160,7 @@ export default function AddMembersPage() {
       }
     } catch (error) {
       console.error('Error fetching data:', error);
-      message.error('Failed to load data');
+      showToast('Failed to load data', 'error');
     } finally {
       setLoading(false);
     }
@@ -230,7 +232,7 @@ export default function AddMembersPage() {
     const hasChanges = selectedMembers.length > 0 || removedMemberIds.length > 0;
     
     if (!hasChanges) {
-      message.warning('No changes to save.');
+      showToast('No changes to save.', 'warning');
       return;
     }
 
@@ -239,7 +241,7 @@ export default function AddMembersPage() {
       const token = localStorage.getItem('auth_token');
       
       if (!token) {
-        message.error('No authentication token found');
+        showToast('No authentication token found', 'error');
         return;
       }
 
@@ -279,7 +281,7 @@ export default function AddMembersPage() {
       });
 
       if (response.error) {
-        message.error(`Failed to update organization: ${response.error.message}`);
+        showToast(`Failed to update organization: ${response.error.message}`, 'error');
         return;
       }
 
@@ -295,13 +297,13 @@ export default function AddMembersPage() {
         successMessage = `Organization updated! Removed ${removedCount} member(s).`;
       }
       
-      message.success(successMessage);
+      showToast(successMessage, 'success');
       
       // Navigate back to departments page with refresh parameter
       router.push('/dashboard/departments?refresh=true');
     } catch (error) {
       console.error('Error updating organization:', error);
-      message.error('Failed to update organization');
+      showToast('Failed to update organization', 'error');
     } finally {
       setSubmitting(false);
     }
