@@ -16,7 +16,7 @@ import { SearchOutlined, FilterOutlined, DownloadOutlined, EyeOutlined, EditOutl
 import dayjs from 'dayjs';
 import { useAuth } from '@/lib/auth-context';
 import { useToast } from '@/lib/toast-context';
-import { apiRequest } from '@/lib/api';
+import { apiRequest, getApiBase } from '@/lib/api';
 
 type Gender = 'male' | 'female' | 'child';
 type Status = 'Active' | 'Inactive';
@@ -146,6 +146,7 @@ export default function MembersPage() {
       mobile_number: string;
       address: string;
     };
+    is_active?: boolean | null;
   }
 
   // Convert backend member to frontend member format
@@ -174,9 +175,11 @@ export default function MembersPage() {
       'child': 'Child'
     };
 
-    // Determine status based on membership
     const membershipStatus = membershipStatusMap[backendMember.membership_status] || 'Full Member';
-    const status: Status = membershipStatus === 'Full Member' || membershipStatus === 'Adherent' ? 'Active' : 'Inactive';
+
+    // Determine status based on is_active field
+    // Show "Active" for all cases except when is_active is explicitly false
+    const status: Status = backendMember.is_active === false ? 'Inactive' : 'Active';
 
     // Map gender to include child option
     let gender: Gender;
@@ -252,7 +255,7 @@ export default function MembersPage() {
         const mappedMembers = response.data.members.map(mapBackendMember);
         setMembers(mappedMembers);
       } else if (response.error) {
-        console.error('Failed to fetch members:', response.error);
+        console.error('Failed to fetch members:', response.error.message || response.error);
         setError(response.error.message || 'Failed to fetch members');
       } else {
         console.warn('Unexpected API response format:', response);
@@ -711,42 +714,63 @@ export default function MembersPage() {
                   return undefined;
                 };
 
+                // Helper function to clean payload (remove undefined/null/empty values, but keep required fields)
+                const cleanPayload = (obj: any): any => {
+                  const cleaned: any = {};
+                  const requiredFields = [
+                    'digital_address', 'whatsapp_number', 'next_of_kin_name', 
+                    'next_of_kin_relationship', 'next_of_kin_mobile_number', 'next_of_kin_address'
+                  ];
+                  
+                  for (const [key, value] of Object.entries(obj)) {
+                    if (typeof value === 'object' && !Array.isArray(value) && value !== null) {
+                      const cleanedNested = cleanPayload(value);
+                      if (Object.keys(cleanedNested).length > 0) {
+                        cleaned[key] = cleanedNested;
+                      }
+                    } else if (value !== undefined && value !== null && (value !== '' || requiredFields.includes(key))) {
+                      cleaned[key] = value;
+                    }
+                  }
+                  return cleaned;
+                };
+
                 // Prepare the API payload according to the backend structure
-                const memberPayload = {
+                const memberPayload = cleanPayload({
                   member: {
-                    surname: values.surname || '',
-                    other_names: values.otherNames || '',
+                    surname: values.surname,
+                    other_names: values.otherNames,
                     gender: values.gender || 'male',
-                    date_of_birth: formatDate(values.dateOfBirth) || '',
+                    date_of_birth: formatDate(values.dateOfBirth),
                     marital_status: values.maritalStatus || 'single',
-                    nationality: values.nationality || '',
-                    hometown: values.hometown || '',
-                    region: values.region || '',
-                    residential_address: values.residentialAddress || '',
-                    digital_address: values.digitalAddress || '',
-                    mobile_number: values.mobileNumber || '',
-                    whatsapp_number: values.whatsappNumber || values.mobileNumber || '',
-                    email_address: values.email || '',
+                    nationality: values.nationality,
+                    hometown: values.hometown,
+                    region: values.region,
+                    residential_address: values.residentialAddress,
+                    digital_address: values.digitalAddress || 'N/A', // Required field with fallback
+                    mobile_number: values.mobileNumber,
+                    whatsapp_number: values.whatsappNumber || values.mobileNumber || 'N/A', // Required field with fallback
+                    email_address: values.email,
                     membership_status: values.membershipStatus?.toLowerCase().replace(' ', '_') || 'full_member',
-                    date_joined_society: formatDate(values.dateJoinedSociety) || '',
+                    date_joined_society: formatDate(values.dateJoinedSociety),
                     transferred_from_another_society: values.transferredFromAnotherSociety || false,
-                    natal_group: values.natalGroup?.toLowerCase() || '',
+                    natal_group: values.natalGroup?.toLowerCase(),
                     baptised: values.baptised || false,
                     date_of_baptism: values.baptised ? formatDate(values.baptismDate) : undefined,
-                    place_of_baptism: values.baptised ? (values.baptismPlace || '') : undefined,
+                    place_of_baptism: values.baptised ? values.baptismPlace : undefined,
                     confirmed: values.confirmed || false,
                     date_of_confirmation: values.confirmed ? formatDate(values.confirmationDate) : undefined,
-                    place_of_confirmation: values.confirmed ? (values.confirmationPlace || '') : undefined,
-                    former_society: values.transferredFromAnotherSociety ? (values.formerSocietyName || '') : undefined,
-                    occupation: values.occupation || '',
-                    place_of_work_or_school: values.placeOfWork || '',
-                    skills_or_talent: values.skillsTalents || '',
-                    next_of_kin_name: values.nextOfKinName || '',
-                    next_of_kin_relationship: values.nextOfKinRelationship || '',
-                    next_of_kin_mobile_number: values.nextOfKinPhone || '',
-                    next_of_kin_address: values.nextOfKinAddress || '',
+                    place_of_confirmation: values.confirmed ? values.confirmationPlace : undefined,
+                    former_society: values.transferredFromAnotherSociety ? values.formerSocietyName : undefined,
+                    occupation: values.occupation,
+                    place_of_work_or_school: values.placeOfWork,
+                    skills_or_talent: values.skillsTalents,
+                    next_of_kin_name: values.nextOfKinName || 'N/A', // Required field with fallback
+                    next_of_kin_relationship: values.nextOfKinRelationship || 'N/A', // Required field with fallback
+                    next_of_kin_mobile_number: values.nextOfKinPhone || 'N/A', // Required field with fallback
+                    next_of_kin_address: values.nextOfKinAddress || 'N/A', // Required field with fallback
                   }
-                };
+                });
 
                 // Get authentication token
                 const token = localStorage.getItem('auth_token');

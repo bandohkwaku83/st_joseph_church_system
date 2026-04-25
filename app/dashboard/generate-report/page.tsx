@@ -59,38 +59,7 @@ interface BackendAttendance {
   created_at: string;
 }
 
-/** Demo ledger — same idea as Welfare/Dues (monthly GHC 50 target per member) */
-const FALLBACK_WELFARE_PAYMENTS: WelfarePaymentRow[] = [
-  { id: '1', memberId: 1, memberName: 'Kwame Asante', year: 2026, month: 4, amount: 50, paymentDate: '2026-04-14', method: 'Cash' },
-  { id: '2', memberId: 2, memberName: 'Ama Mensah', year: 2026, month: 4, amount: 50, paymentDate: '2026-04-13', method: 'Mobile Money' },
-  { id: '3', memberId: 4, memberName: 'Akosua Adjei', year: 2026, month: 4, amount: 25, paymentDate: '2026-04-10', method: 'Bank Transfer' },
-  { id: '4', memberId: 5, memberName: 'Efua Boateng', year: 2026, month: 4, amount: 50, paymentDate: '2026-04-08', method: 'Cash' },
-  { id: '5', memberId: 6, memberName: 'Yaw Appiah', year: 2026, month: 3, amount: 50, paymentDate: '2026-03-28', method: 'Mobile Money' },
-  { id: '6', memberId: 1, memberName: 'Kwame Asante', year: 2026, month: 3, amount: 50, paymentDate: '2026-03-25', method: 'Cash' },
-  { id: '7', memberId: 2, memberName: 'Ama Mensah', year: 2026, month: 3, amount: 50, paymentDate: '2026-03-24', method: 'Cash' },
-  { id: '8', memberId: 3, memberName: 'Kofi Osei', year: 2026, month: 3, amount: 50, paymentDate: '2026-03-22', method: 'Bank Transfer' },
-  { id: '9', memberId: 4, memberName: 'Akosua Adjei', year: 2026, month: 3, amount: 50, paymentDate: '2026-03-20', method: 'Cash' },
-  { id: '10', memberId: 5, memberName: 'Efua Boateng', year: 2026, month: 3, amount: 50, paymentDate: '2026-03-18', method: 'Cash' },
-  { id: '11', memberId: 6, memberName: 'Yaw Appiah', year: 2026, month: 3, amount: 40, paymentDate: '2026-03-15', method: 'Cash' },
-  { id: '12', memberId: 3, memberName: 'Kofi Osei', year: 2026, month: 2, amount: 50, paymentDate: '2026-02-20', method: 'Cash' },
-  { id: '13', memberId: 1, memberName: 'Kwame Asante', year: 2026, month: 2, amount: 50, paymentDate: '2026-02-18', method: 'Mobile Money' },
-  { id: '14', memberId: 2, memberName: 'Ama Mensah', year: 2026, month: 2, amount: 50, paymentDate: '2026-02-12', method: 'Cash' },
-  { id: '15', memberId: 4, memberName: 'Akosua Adjei', year: 2026, month: 2, amount: 50, paymentDate: '2026-02-10', method: 'Bank Transfer' },
-  { id: '16', memberId: 5, memberName: 'Efua Boateng', year: 2026, month: 2, amount: 50, paymentDate: '2026-02-08', method: 'Cash' },
-  { id: '17', memberId: 6, memberName: 'Yaw Appiah', year: 2026, month: 2, amount: 50, paymentDate: '2026-02-05', method: 'Cash' },
-  { id: '18', memberId: 1, memberName: 'Kwame Asante', year: 2026, month: 1, amount: 50, paymentDate: '2026-01-22', method: 'Cash' },
-  { id: '19', memberId: 2, memberName: 'Ama Mensah', year: 2026, month: 1, amount: 50, paymentDate: '2026-01-20', method: 'Cash' },
-  { id: '20', memberId: 3, memberName: 'Kofi Osei', year: 2026, month: 1, amount: 45, paymentDate: '2026-01-15', method: 'Mobile Money' },
-];
 
-/** Demo attendance aggregates (totals across services) — used for period & comparison reports */
-const MONTHLY_ATTENDANCE_2026: { year: number; month: number; total: number }[] = [
-  { year: 2026, month: 1, total: 780 },
-  { year: 2026, month: 2, total: 805 },
-  { year: 2026, month: 3, total: 830 },
-  { year: 2026, month: 4, total: 810 },
-  { year: 2026, month: 5, total: 785 },
-];
 
 function monthKey(y: number, m: number) {
   return y * 12 + m;
@@ -242,42 +211,25 @@ export default function GenerateReportPage() {
 
   // Convert API data to report format
   const welfarePayments = useMemo(() => {
-    if (welfares.length > 0) {
-      return welfares.map((welfare): WelfarePaymentRow => ({
-        id: welfare.id.toString(),
-        memberId: welfare.member_id,
-        memberName: welfare.member_name,
-        year: welfare.year,
-        month: welfare.month,
-        amount: parseFloat(welfare.amount.toString()),
-        paymentDate: welfare.payment_date,
-        method: welfare.payment_method,
-      }));
-    }
-    
-    // Fallback to demo data if API not available
-    return FALLBACK_WELFARE_PAYMENTS;
+    return welfares.map((welfare): WelfarePaymentRow => ({
+      id: welfare.id.toString(),
+      memberId: welfare.member_id,
+      memberName: welfare.member_name,
+      year: welfare.year,
+      month: welfare.month,
+      amount: parseFloat(welfare.amount.toString()),
+      paymentDate: welfare.payment_date,
+      method: welfare.payment_method,
+    }));
   }, [welfares]);
 
   // Convert members data to roster format
   const roster = useMemo((): Member[] => {
-    if (members.length > 0) {
-      return members.map((member): Member => ({
-        id: member.id,
-        churchNumber: member.parish_number || `CH-${member.id.toString().padStart(4, '0')}`,
-        name: `${member.other_names} ${member.surname}`.trim() || 'Unknown Member',
-      }));
-    }
-    
-    // Fallback roster if members API not available
-    return [
-      { id: 1, churchNumber: 'CH-0001', name: 'Kwame Asante' },
-      { id: 2, churchNumber: 'CH-0002', name: 'Ama Mensah' },
-      { id: 3, churchNumber: 'CH-0003', name: 'Kofi Osei' },
-      { id: 4, churchNumber: 'CH-0004', name: 'Akosua Adjei' },
-      { id: 5, churchNumber: 'CH-0005', name: 'Efua Boateng' },
-      { id: 6, churchNumber: 'CH-0006', name: 'Yaw Appiah' },
-    ];
+    return members.map((member): Member => ({
+      id: member.id,
+      churchNumber: member.parish_number || `CH-${member.id.toString().padStart(4, '0')}`,
+      name: `${member.other_names} ${member.surname}`.trim() || 'Unknown Member',
+    }));
   }, [members]);
 
   const welfareReport = useMemo(() => {
@@ -405,86 +357,65 @@ export default function GenerateReportPage() {
 
   // Convert API attendance data to weekly totals
   const weeklyTotals = useMemo(() => {
-    if (attendances.length > 0) {
-      const weeks: { weekStart: string; label: string; total: number }[] = [];
-      const weekMap: { [key: string]: number } = {};
-      
-      attendances.forEach(attendance => {
-        const date = new Date(attendance.date);
-        
-        // Skip invalid dates
-        if (isNaN(date.getTime())) {
-          console.warn('Invalid date found in attendance record:', attendance.date);
-          return;
-        }
-        
-        const weekStart = new Date(date);
-        weekStart.setDate(date.getDate() - date.getDay()); // Get Sunday of the week
-        const weekKey = weekStart.toISOString().split('T')[0];
-        
-        if (!weekMap[weekKey]) {
-          weekMap[weekKey] = 0;
-        }
-        weekMap[weekKey] += attendance.total;
-      });
-      
-      // Convert to array and sort by date (newest first)
-      Object.entries(weekMap).forEach(([weekStart, total]) => {
-        const date = new Date(weekStart);
-        weeks.push({
-          weekStart,
-          label: `Week of ${date.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}`,
-          total
-        });
-      });
-      
-      return weeks.sort((a, b) => new Date(b.weekStart).getTime() - new Date(a.weekStart).getTime()).slice(0, 10);
-    }
+    const weeks: { weekStart: string; label: string; total: number }[] = [];
+    const weekMap: { [key: string]: number } = {};
     
-    // Fallback to hardcoded data
-    return [
-      { weekStart: '2026-04-14', label: 'Week of 14 Apr 2026', total: 198 },
-      { weekStart: '2026-04-07', label: 'Week of 7 Apr 2026', total: 202 },
-      { weekStart: '2026-03-31', label: 'Week of 31 Mar 2026', total: 195 },
-      { weekStart: '2026-03-24', label: 'Week of 24 Mar 2026', total: 188 },
-    ];
+    attendances.forEach(attendance => {
+      const date = new Date(attendance.date);
+      
+      // Skip invalid dates
+      if (isNaN(date.getTime())) {
+        console.warn('Invalid date found in attendance record:', attendance.date);
+        return;
+      }
+      
+      const weekStart = new Date(date);
+      weekStart.setDate(date.getDate() - date.getDay()); // Get Sunday of the week
+      const weekKey = weekStart.toISOString().split('T')[0];
+      
+      if (!weekMap[weekKey]) {
+        weekMap[weekKey] = 0;
+      }
+      weekMap[weekKey] += attendance.total;
+    });
+    
+    // Convert to array and sort by date (newest first)
+    Object.entries(weekMap).forEach(([weekStart, total]) => {
+      const date = new Date(weekStart);
+      weeks.push({
+        weekStart,
+        label: `Week of ${date.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}`,
+        total
+      });
+    });
+    
+    return weeks.sort((a, b) => new Date(b.weekStart).getTime() - new Date(a.weekStart).getTime()).slice(0, 10);
   }, [attendances]);
 
   // Convert API attendance data to monthly totals
   const monthlyTotals = useMemo(() => {
-    if (attendances.length > 0) {
-      const totals: { [key: string]: number } = {};
-      
-      attendances.forEach(attendance => {
-        const date = new Date(attendance.date);
-        
-        // Skip invalid dates
-        if (isNaN(date.getTime())) {
-          console.warn('Invalid date found in attendance record:', attendance.date);
-          return;
-        }
-        
-        const year = date.getFullYear();
-        const month = date.getMonth() + 1; // Convert to 1-based month
-        const key = `${year}-${month}`;
-        
-        if (!totals[key]) {
-          totals[key] = 0;
-        }
-        totals[key] += attendance.total;
-      });
-      
-      return totals;
-    }
+    const totals: { [key: string]: number } = {};
     
-    // Fallback to hardcoded data
-    return {
-      '2026-1': 780,
-      '2026-2': 805,
-      '2026-3': 830,
-      '2026-4': 810,
-      '2026-5': 785,
-    };
+    attendances.forEach(attendance => {
+      const date = new Date(attendance.date);
+      
+      // Skip invalid dates
+      if (isNaN(date.getTime())) {
+        console.warn('Invalid date found in attendance record:', attendance.date);
+        return;
+      }
+      
+      const year = date.getFullYear();
+      const month = date.getMonth() + 1; // Convert to 1-based month
+      const key = `${year}-${month}`;
+      
+      if (!totals[key]) {
+        totals[key] = 0;
+      }
+      totals[key] += attendance.total;
+    });
+    
+    return totals;
   }, [attendances]);
 
   const attendanceReport = useMemo(() => {
@@ -597,8 +528,8 @@ export default function GenerateReportPage() {
         </Card>
       )}
 
-      {/* Error State */}
-      {error && !loading && (
+      {/* Error State or No Data */}
+      {(error || (!loading && (welfares.length === 0 || members.length === 0))) && (
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
           <div className="flex">
             <div className="flex-shrink-0">
@@ -608,18 +539,27 @@ export default function GenerateReportPage() {
             </div>
             <div className="ml-3">
               <h3 className="text-sm font-medium text-yellow-800">
-                Data Loading Issue
+                {error ? 'Data Loading Issue' : 'No Data Available'}
               </h3>
               <div className="mt-2 text-sm text-yellow-700">
-                <p>Unable to load welfare data from the backend API. Error: {error}</p>
-                <p className="mt-1">Please check that the backend server is running at {getApiBase()}</p>
+                {error ? (
+                  <>
+                    <p>Unable to load data from the backend API. Error: {error}</p>
+                    <p className="mt-1">Please check that the backend server is running at {getApiBase()}</p>
+                  </>
+                ) : (
+                  <>
+                    <p>No welfare payments or member data found in the system.</p>
+                    <p className="mt-1">Reports require welfare payment records and member data to generate meaningful insights.</p>
+                  </>
+                )}
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {!loading && (
+      {!loading && !error && welfares.length > 0 && members.length > 0 && (
         <Tabs
           defaultActiveKey="welfare"
           items={[

@@ -62,16 +62,33 @@ export async function apiFetch(
     }
   }
   
+  // Create AbortController for timeout with different timeouts for different methods
+  const controller = new AbortController();
+  const isPostRequest = options.method === 'POST' || options.method === 'PUT' || options.method === 'PATCH';
+  const timeoutDuration = isPostRequest ? 120000 : 30000; // 120s for POST/PUT/PATCH, 30s for GET
+  const timeoutId = setTimeout(() => controller.abort(), timeoutDuration);
+  
+  
   try {
     const response = await fetch(url, {
       ...options,
-      credentials: options.credentials ?? 'include',
+      credentials: options.credentials ?? 'omit', // Changed from 'include' to 'omit'
       headers,
+      signal: controller.signal,
     });
     
+    clearTimeout(timeoutId);
     return response;
   } catch (error) {
+    clearTimeout(timeoutId);
     console.error('Fetch error:', error);
+    
+    // Handle timeout errors
+    if (error instanceof Error && error.name === 'AbortError') {
+      const method = options.method || 'GET';
+      throw new Error(`Request timeout: ${method} request to ${url} took longer than ${timeoutDuration/1000} seconds to complete. This might be due to server processing time or network issues.`);
+    }
+    
     // Handle network errors
     if (error instanceof TypeError && error.message.includes('fetch')) {
       throw new Error(`Unable to connect to the server at ${url}. Please check if the backend is running and accessible.`);
@@ -95,6 +112,7 @@ export async function apiRequest<T = any>(
     // Try to parse JSON response
     try {
       const json = await response.json();
+      
       if (response.ok) {
         data = json;
       } else {
