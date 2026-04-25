@@ -74,12 +74,12 @@ export default function SignInPage() {
 
             <form onSubmit={handleLoginSubmit} className="space-y-5">
               <div>
-                <label className="mb-2 block text-sm font-semibold text-slate-700">Email</label>
+                <label className="mb-2 block text-sm font-semibold text-slate-700">Username</label>
                 <div className="relative">
                   <HiOutlineMail className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
                   <Input
                     type="text"
-                    placeholder="Enter your email"
+                    placeholder="Enter your username"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
                     required
