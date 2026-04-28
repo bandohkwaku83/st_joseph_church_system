@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import {
   HiOutlineUsers,
   HiUserAdd,
@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Table, Tag, Input, Select, Space, Button as AntButton, Steps, Form, DatePicker, Row, Col, Drawer, Upload, Radio } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import type { UploadFile, UploadProps } from 'antd';
-import { SearchOutlined, FilterOutlined, DownloadOutlined, EyeOutlined, EditOutlined, UploadOutlined, UserOutlined } from '@ant-design/icons';
+import { SearchOutlined, FilterOutlined, DownloadOutlined, EyeOutlined, EditOutlined, UploadOutlined, CameraOutlined, UserOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useAuth } from '@/lib/auth-context';
 import { useToast } from '@/lib/toast-context';
@@ -20,6 +20,26 @@ import { apiRequest, getApiBase } from '@/lib/api';
 
 type Gender = 'male' | 'female' | 'child';
 type Status = 'Active' | 'Inactive';
+
+/** Ghana's 16 administrative regions (post-2019). */
+const GHANA_REGIONS: { label: string; value: string }[] = [
+  { label: 'Ahafo Region', value: 'Ahafo Region' },
+  { label: 'Ashanti Region', value: 'Ashanti Region' },
+  { label: 'Bono Region', value: 'Bono Region' },
+  { label: 'Bono East Region', value: 'Bono East Region' },
+  { label: 'Central Region', value: 'Central Region' },
+  { label: 'Eastern Region', value: 'Eastern Region' },
+  { label: 'Greater Accra Region', value: 'Greater Accra Region' },
+  { label: 'North East Region', value: 'North East Region' },
+  { label: 'Northern Region', value: 'Northern Region' },
+  { label: 'Oti Region', value: 'Oti Region' },
+  { label: 'Savannah Region', value: 'Savannah Region' },
+  { label: 'Upper East Region', value: 'Upper East Region' },
+  { label: 'Upper West Region', value: 'Upper West Region' },
+  { label: 'Volta Region', value: 'Volta Region' },
+  { label: 'Western Region', value: 'Western Region' },
+  { label: 'Western North Region', value: 'Western North Region' },
+];
 
 // Helper component for displaying info rows
 const InfoRow = ({ label, value, breakWords, showEmpty = true }: { label: string; value?: string | number | boolean | null | undefined; breakWords?: boolean; showEmpty?: boolean }) => {
@@ -59,7 +79,6 @@ interface Member {
   otherNames?: string;
   dateOfBirth?: string;
   maritalStatus?: string;
-  nationality?: string;
   hometown?: string;
   region?: string;
   residentialAddress?: string;
@@ -102,7 +121,16 @@ export default function MembersPage() {
   const [fileList, setFileList] = useState<UploadFile[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const drawerBodyRef = useRef<HTMLDivElement>(null);
-  
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+
+  const regionSelectOptions = useMemo(() => {
+    const saved = editingMember?.region?.trim();
+    if (saved && !GHANA_REGIONS.some((r) => r.value === saved)) {
+      return [{ label: `${saved} (current)`, value: saved }, ...GHANA_REGIONS];
+    }
+    return GHANA_REGIONS;
+  }, [editingMember?.region]);
+
   // API integration for members
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
@@ -117,7 +145,7 @@ export default function MembersPage() {
     gender: 'male' | 'female';
     date_of_birth: string;
     marital_status: string;
-    nationality: string;
+    nationality?: string;
     hometown: string;
     region: string;
     residential_address: string;
@@ -205,7 +233,6 @@ export default function MembersPage() {
       otherNames: backendMember.other_names,
       dateOfBirth: backendMember.date_of_birth,
       maritalStatus: backendMember.marital_status,
-      nationality: backendMember.nationality,
       hometown: backendMember.hometown,
       region: backendMember.region,
       residentialAddress: backendMember.residential_address,
@@ -340,7 +367,6 @@ export default function MembersPage() {
       dateOfBirth: member.dateOfBirth ? dayjs(member.dateOfBirth) : undefined,
       age: calculatedAge,
       maritalStatus: member.maritalStatus,
-      nationality: member.nationality,
       hometown: member.hometown,
       region: member.region,
       occupation: member.occupation,
@@ -702,6 +728,10 @@ export default function MembersPage() {
             form={form}
             layout="vertical"
             preserve={true}
+            onFinishFailed={({ errorFields }) => {
+              const name = errorFields[0]?.name;
+              if (name) form.scrollToField(name);
+            }}
             onFinish={async (values) => {
               try {
                 setSubmitting(true);
@@ -718,8 +748,10 @@ export default function MembersPage() {
                 const cleanPayload = (obj: any): any => {
                   const cleaned: any = {};
                   const requiredFields = [
-                    'digital_address', 'whatsapp_number', 'next_of_kin_name', 
-                    'next_of_kin_relationship', 'next_of_kin_mobile_number', 'next_of_kin_address'
+                    'next_of_kin_name',
+                    'next_of_kin_relationship',
+                    'next_of_kin_mobile_number',
+                    'next_of_kin_address',
                   ];
                   
                   for (const [key, value] of Object.entries(obj)) {
@@ -742,15 +774,14 @@ export default function MembersPage() {
                     other_names: values.otherNames,
                     gender: values.gender || 'male',
                     date_of_birth: formatDate(values.dateOfBirth),
-                    marital_status: values.maritalStatus || 'single',
-                    nationality: values.nationality,
+                    marital_status: values.maritalStatus,
                     hometown: values.hometown,
                     region: values.region,
                     residential_address: values.residentialAddress,
-                    digital_address: values.digitalAddress || 'N/A', // Required field with fallback
+                    digital_address: values.digitalAddress?.trim() || undefined,
                     mobile_number: values.mobileNumber,
-                    whatsapp_number: values.whatsappNumber || values.mobileNumber || 'N/A', // Required field with fallback
-                    email_address: values.email,
+                    whatsapp_number: values.whatsappNumber?.trim() || undefined,
+                    email_address: values.email?.trim() || undefined,
                     membership_status: values.membershipStatus?.toLowerCase().replace(' ', '_') || 'full_member',
                     date_joined_society: formatDate(values.dateJoinedSociety),
                     transferred_from_another_society: values.transferredFromAnotherSociety || false,
@@ -765,10 +796,10 @@ export default function MembersPage() {
                     occupation: values.occupation,
                     place_of_work_or_school: values.placeOfWork,
                     skills_or_talent: values.skillsTalents,
-                    next_of_kin_name: values.nextOfKinName || 'N/A', // Required field with fallback
-                    next_of_kin_relationship: values.nextOfKinRelationship || 'N/A', // Required field with fallback
-                    next_of_kin_mobile_number: values.nextOfKinPhone || 'N/A', // Required field with fallback
-                    next_of_kin_address: values.nextOfKinAddress || 'N/A', // Required field with fallback
+                    next_of_kin_name: values.nextOfKinName,
+                    next_of_kin_relationship: values.nextOfKinRelationship,
+                    next_of_kin_mobile_number: values.nextOfKinPhone,
+                    next_of_kin_address: values.nextOfKinAddress,
                   }
                 });
 
@@ -869,37 +900,76 @@ export default function MembersPage() {
                         <UserOutlined className="text-4xl text-gray-400" />
                       </div>
                     )}
-                    <Upload
-                      name="profileImage"
-                      listType="picture"
-                      maxCount={1}
-                      fileList={fileList}
-                      beforeUpload={(file) => {
-                        const reader = new FileReader();
-                        reader.onloadend = () => {
-                          const base64String = reader.result as string;
-                          setProfileImagePreview(base64String);
-                          form.setFieldValue('profileImage', base64String);
-                        };
-                        reader.readAsDataURL(file);
-                        return false; // Prevent automatic upload
-                      }}
-                      onRemove={() => {
-                        setProfileImagePreview(null);
-                        setFileList([]);
-                        form.setFieldValue('profileImage', null);
-                        return true;
-                      }}
-                      onChange={(info) => {
-                        setFileList(info.fileList);
-                      }}
+                    <input
+                      ref={cameraInputRef}
+                      type="file"
                       accept="image/*"
-                      className="w-full"
-                    >
-                      <AntButton icon={<UploadOutlined />} className="w-full">
-                        {profileImagePreview ? 'Change Photo' : 'Upload Photo'}
+                      capture="user"
+                      className="sr-only"
+                      aria-hidden
+                      tabIndex={-1}
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          const reader = new FileReader();
+                          reader.onloadend = () => {
+                            const base64String = reader.result as string;
+                            setProfileImagePreview(base64String);
+                            form.setFieldValue('profileImage', base64String);
+                            setFileList([
+                              {
+                                uid: String(Date.now()),
+                                name: file.name || 'camera.jpg',
+                                status: 'done',
+                                url: base64String,
+                              },
+                            ]);
+                          };
+                          reader.readAsDataURL(file);
+                        }
+                        e.target.value = '';
+                      }}
+                    />
+                    <div className="flex flex-col sm:flex-row gap-2 w-full">
+                      <Upload
+                        name="profileImage"
+                        listType="picture"
+                        maxCount={1}
+                        fileList={fileList}
+                        beforeUpload={(file) => {
+                          const reader = new FileReader();
+                          reader.onloadend = () => {
+                            const base64String = reader.result as string;
+                            setProfileImagePreview(base64String);
+                            form.setFieldValue('profileImage', base64String);
+                          };
+                          reader.readAsDataURL(file);
+                          return false; // Prevent automatic upload
+                        }}
+                        onRemove={() => {
+                          setProfileImagePreview(null);
+                          setFileList([]);
+                          form.setFieldValue('profileImage', null);
+                          return true;
+                        }}
+                        onChange={(info) => {
+                          setFileList(info.fileList);
+                        }}
+                        accept="image/*"
+                        className="flex-1 w-full min-w-0"
+                      >
+                        <AntButton icon={<UploadOutlined />} className="w-full">
+                          {profileImagePreview ? 'Change from files' : 'Upload photo'}
+                        </AntButton>
+                      </Upload>
+                      <AntButton
+                        icon={<CameraOutlined />}
+                        className="flex-1 w-full"
+                        onClick={() => cameraInputRef.current?.click()}
+                      >
+                        Take picture
                       </AntButton>
-                    </Upload>
+                    </div>
                     <p className="text-xs text-gray-500 text-center">
                       Recommended: Square image, max 2MB
                     </p>
@@ -981,6 +1051,7 @@ export default function MembersPage() {
                     <Form.Item
                       label="Marital Status"
                       name="maritalStatus"
+                      rules={[{ required: true, message: 'Please select marital status' }]}
                     >
                   <Radio.Group size="large">
                     <Radio value="single">Single</Radio>
@@ -991,18 +1062,12 @@ export default function MembersPage() {
                   </Radio.Group>
                     </Form.Item>
 
-                    <Form.Item
-                      label="Nationality"
-                      name="nationality"
-                    >
-                  <Input placeholder="Enter nationality" size="large" />
-                    </Form.Item>
-
                 <Row gutter={16}>
                   <Col xs={24} sm={12}>
                     <Form.Item
                       label="Hometown"
                       name="hometown"
+                      rules={[{ required: true, message: 'Please enter hometown' }]}
                     >
                       <Input placeholder="Enter hometown" size="large" />
                     </Form.Item>
@@ -1011,8 +1076,16 @@ export default function MembersPage() {
                     <Form.Item
                       label="Region"
                       name="region"
+                      rules={[{ required: true, message: 'Please select region' }]}
                     >
-                      <Input placeholder="Enter region" size="large" />
+                      <Select
+                        placeholder="Select region"
+                        size="large"
+                        allowClear
+                        showSearch
+                        optionFilterProp="label"
+                        options={regionSelectOptions}
+                      />
                     </Form.Item>
                   </Col>
                 </Row>
@@ -1025,6 +1098,7 @@ export default function MembersPage() {
                     <Form.Item
                       label="Residential Address"
                       name="residentialAddress"
+                      rules={[{ required: true, message: 'Please enter residential address' }]}
                     >
                       <Input.TextArea rows={2} placeholder="Enter residential address" size="large" />
                     </Form.Item>
@@ -1033,7 +1107,7 @@ export default function MembersPage() {
                       label="Digital Address (Ghana Post GPS)"
                       name="digitalAddress"
                     >
-                      <Input placeholder="e.g., GA-123-4567" size="large" />
+                      <Input placeholder="Optional — e.g., GA-123-4567" size="large" />
                     </Form.Item>
 
                     <Form.Item
@@ -1045,17 +1119,24 @@ export default function MembersPage() {
                     </Form.Item>
 
                     <Form.Item
-                      label="WhatsApp Number (if different)"
+                      label="WhatsApp Number (optional)"
                       name="whatsappNumber"
                     >
                       <Input placeholder="e.g., 0244123456" size="large" />
                     </Form.Item>
 
                 <Form.Item
-                      label="Email Address"
+                      label="Email Address (optional)"
                       name="email"
                       rules={[
-                        { type: 'email', message: 'Please enter a valid email' }
+                        {
+                          validator: async (_, value) => {
+                            const v = typeof value === 'string' ? value.trim() : '';
+                            if (!v) return;
+                            const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+                            if (!emailOk) throw new Error('Please enter a valid email address');
+                          },
+                        },
                       ]}
                     >
                       <Input placeholder="email@example.com" size="large" />
@@ -1080,7 +1161,7 @@ export default function MembersPage() {
                     </Form.Item>
 
                     <Form.Item
-                      label="Date Joined This Society"
+                      label="Date Joined this parish"
                       name="dateJoinedSociety"
                       rules={[{ required: true, message: 'Please select date joined' }]}
                     >
@@ -1088,9 +1169,10 @@ export default function MembersPage() {
                     </Form.Item>
 
                     <Form.Item
-                      label="Transferred from another Society?"
+                      label="Transferred from another parish?"
                       name="transferredFromAnotherSociety"
                       initialValue={false}
+                      rules={[{ required: true, message: 'Please select Yes or No' }]}
                     >
                       <Radio.Group size="large">
                         <Radio value={true}>Yes</Radio>
@@ -1107,11 +1189,11 @@ export default function MembersPage() {
                       {({ getFieldValue }) => 
                         getFieldValue('transferredFromAnotherSociety') === true ? (
                           <Form.Item
-                            label="Name of former Society"
+                            label="Name of former parish"
                             name="formerSocietyName"
-                            rules={[{ required: true, message: 'Please enter former society name' }]}
+                            rules={[{ required: true, message: 'Please enter the name of the former parish' }]}
                           >
-                            <Input placeholder="Enter former society name" size="large" />
+                            <Input placeholder="Enter former parish name" size="large" />
                 </Form.Item>
                         ) : null
                       }
@@ -1126,6 +1208,7 @@ export default function MembersPage() {
                       label="Baptised?"
                       name="baptised"
                       initialValue={false}
+                      rules={[{ required: true, message: 'Please select Yes or No' }]}
                       >
                       <Radio.Group size="large">
                         <Radio value={true}>Yes</Radio>
@@ -1170,6 +1253,7 @@ export default function MembersPage() {
                       label="Confirmed?"
                       name="confirmed"
                       initialValue={false}
+                      rules={[{ required: true, message: 'Please select Yes or No' }]}
                     >
                       <Radio.Group size="large">
                         <Radio value={true}>Yes</Radio>
@@ -1210,11 +1294,12 @@ export default function MembersPage() {
             {/* Step 2: Occupation & Details */}
             <div style={{ display: currentStep === 1 ? 'block' : 'none' }} key="step-2" className="space-y-6">
                 <div>
-                  <h4 className="text-base font-semibold text-gray-900 mb-4">OCCUPATION & SKILLS (OPTIONAL)</h4>
+                  <h4 className="text-base font-semibold text-gray-900 mb-4">OCCUPATION & SKILLS</h4>
                   <div className="space-y-4">
                       <Form.Item
                       label="Occupation"
                       name="occupation"
+                      rules={[{ required: true, message: 'Please enter occupation' }]}
                       >
                       <Input placeholder="Enter occupation" size="large" />
                       </Form.Item>
@@ -1222,6 +1307,7 @@ export default function MembersPage() {
                       <Form.Item
                       label="Place of Work/School"
                       name="placeOfWork"
+                      rules={[{ required: true, message: 'Please enter place of work or school' }]}
                       >
                       <Input placeholder="Enter place of work or school" size="large" />
                       </Form.Item>
@@ -1229,6 +1315,7 @@ export default function MembersPage() {
                       <Form.Item
                       label="Skills/Talents (e.g. music, teaching, IT, carpentry)"
                       name="skillsTalents"
+                      rules={[{ required: true, whitespace: true, message: 'Please enter skills or talents' }]}
                       >
                       <Input.TextArea rows={3} placeholder="Enter skills and talents" size="large" />
                       </Form.Item>
@@ -1241,6 +1328,7 @@ export default function MembersPage() {
                       <Form.Item
                       label="Name"
                       name="nextOfKinName"
+                      rules={[{ required: true, message: 'Please enter next of kin name' }]}
                       >
                       <Input placeholder="Enter name" size="large" />
                       </Form.Item>
@@ -1248,6 +1336,7 @@ export default function MembersPage() {
                       <Form.Item
                       label="Relationship"
                       name="nextOfKinRelationship"
+                      rules={[{ required: true, message: 'Please enter relationship' }]}
                       >
                       <Input placeholder="Enter relationship" size="large" />
                       </Form.Item>
@@ -1255,6 +1344,7 @@ export default function MembersPage() {
                       <Form.Item
                       label="Phone Number"
                       name="nextOfKinPhone"
+                      rules={[{ required: true, message: 'Please enter phone number' }]}
                       >
                       <Input placeholder="Enter phone number" size="large" />
                       </Form.Item>
@@ -1262,6 +1352,7 @@ export default function MembersPage() {
                 <Form.Item
                       label="Address"
                       name="nextOfKinAddress"
+                      rules={[{ required: true, message: 'Please enter address' }]}
                 >
                       <Input.TextArea rows={2} placeholder="Enter address" size="large" />
                 </Form.Item>
@@ -1297,15 +1388,32 @@ export default function MembersPage() {
     disabled={submitting}
     onClick={async () => {
       try {
-        // Validate current step fields before proceeding
         if (currentStep === 0) {
-          await form.validateFields(['surname', 'otherNames', 'gender', 'dateOfBirth']);
+          await form.validateFields([
+            'surname',
+            'otherNames',
+            'gender',
+            'dateOfBirth',
+            'maritalStatus',
+            'hometown',
+            'region',
+          ]);
         } else if (currentStep === 1) {
-          // No required fields in step 2, so just proceed
+          await form.validateFields([
+            'occupation',
+            'placeOfWork',
+            'skillsTalents',
+            'nextOfKinName',
+            'nextOfKinRelationship',
+            'nextOfKinPhone',
+            'nextOfKinAddress',
+          ]);
         }
         setCurrentStep(currentStep + 1);
-      } catch (error) {
-        // Don't proceed if validation fails
+      } catch (error: unknown) {
+        const err = error as { errorFields?: { name: (string | number)[] }[] };
+        const first = err?.errorFields?.[0]?.name;
+        if (first) form.scrollToField(first);
       }
     }}
     className="flex-1"
@@ -1426,7 +1534,6 @@ export default function MembersPage() {
                     label="Marital Status" 
                     value={selectedMember.maritalStatus ? selectedMember.maritalStatus.charAt(0).toUpperCase() + selectedMember.maritalStatus.slice(1) : undefined} 
                   />
-                  <InfoRow label="Nationality" value={selectedMember.nationality} />
                   <InfoRow label="Hometown" value={selectedMember.hometown} />
                   <InfoRow label="Region" value={selectedMember.region} />
                 </CardContent>
