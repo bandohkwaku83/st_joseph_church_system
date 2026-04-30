@@ -6,6 +6,11 @@ export function getApiBase(): string {
   return API_BASE;
 }
 
+export function getServerBase(): string {
+  // Remove /api/v1/ or /api/v1 from the end to get the base server URL
+  return API_BASE.replace(/\/api\/v1\/?$/, '');
+}
+
 export interface ApiFetchOptions extends Omit<RequestInit, 'credentials'> {
   /** Default true – always send credentials so auth cookie is included */
   credentials?: RequestInit['credentials'];

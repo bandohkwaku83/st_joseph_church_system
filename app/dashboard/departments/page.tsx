@@ -9,7 +9,7 @@ import {
 } from 'react-icons/hi';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Table, Tag, Button as AntButton, Input as AntInput, Drawer, Spin } from 'antd';
+import { Table, Tag, Button as AntButton, Input as AntInput, Drawer, Spin, Select } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { SearchOutlined, EditOutlined, EyeOutlined, PlusOutlined, LoadingOutlined } from '@ant-design/icons';
 import { useAuth } from '@/lib/auth-context';
@@ -63,6 +63,7 @@ interface CreateOrganizationPayload {
     name: string;
     description: string;
     status: string;
+    leader_id?: number | null;
     organisation_members: {
       member_id: number;
       role: string;
@@ -90,6 +91,7 @@ export default function DepartmentsPage() {
     name: '',
     description: '',
     status: 'active',
+    leader_id: null as number | null,
   });
   const [manageForm, setManageForm] = useState({
     name: '',
@@ -187,6 +189,7 @@ export default function DepartmentsPage() {
           name: formData.name,
           description: formData.description,
           status: formData.status,
+          leader_id: formData.leader_id || null,
           organisation_members: [], // Empty for now, can be extended later
         },
       };
@@ -206,7 +209,7 @@ export default function DepartmentsPage() {
 
       showToast('Organization created successfully!', 'success');
       setShowModal(false);
-      setCreateForm({ name: '', description: '', status: 'active' });
+      setCreateForm({ name: '', description: '', status: 'active', leader_id: null });
       
       // Refresh the organizations list
       await fetchOrganizations();
@@ -759,15 +762,14 @@ export default function DepartmentsPage() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Description *
+                  Description
                 </label>
                 <textarea
                   rows={3}
-                  required
                   value={manageForm.description}
                   onChange={(e) => setManageForm({ ...manageForm, description: e.target.value })}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                  placeholder="Organization description"
+                  placeholder="Organization description (optional)"
                 />
               </div>
               
@@ -776,23 +778,25 @@ export default function DepartmentsPage() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Organization Leader
                 </label>
-                <select
-                  value={manageForm.leader_id || ''}
-                  onChange={(e) => setManageForm({ 
+                <Select
+                  value={manageForm.leader_id || undefined}
+                  onChange={(value) => setManageForm({ 
                     ...manageForm, 
-                    leader_id: e.target.value ? parseInt(e.target.value) : null 
+                    leader_id: value || null 
                   })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                >
-                  <option value="">No Leader Selected</option>
-                  {managingOrganization.members.map(member => (
-                    <option key={member.member_id} value={member.member_id}>
-                      {getMemberName(member.member_id)} ({member.role})
-                    </option>
-                  ))}
-                </select>
+                  placeholder="Search and select a leader..."
+                  allowClear
+                  showSearch
+                  optionFilterProp="label"
+                  size="large"
+                  className="w-full"
+                  options={managingOrganization.members.map(member => ({
+                    value: member.member_id,
+                    label: `${getMemberName(member.member_id)} (${member.role})`
+                  }))}
+                />
                 <p className="text-xs text-gray-500 mt-1">
-                  Select a member from this organization to be the leader
+                  Search and select a member from this organization to be the leader
                 </p>
               </div>
               
@@ -922,16 +926,42 @@ export default function DepartmentsPage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Description *
+                Description
               </label>
               <textarea
                 rows={3}
-                required
                 value={createForm.description}
                 onChange={(e) => setCreateForm({ ...createForm, description: e.target.value })}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                placeholder="Organization description and purpose..."
+                placeholder="Organization description and purpose... (optional)"
               />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Leader
+              </label>
+              <Select
+                value={createForm.leader_id || undefined}
+                onChange={(value) => setCreateForm({ 
+                  ...createForm, 
+                  leader_id: value || null 
+                })}
+                placeholder="Search and select a leader..."
+                allowClear
+                showSearch
+                optionFilterProp="label"
+                size="large"
+                className="w-full"
+                options={members.map(member => ({
+                  value: member.id,
+                  label: `${member.surname || ''} ${member.other_names || ''}`.trim() || 
+                         `${member.first_name || ''} ${member.last_name || ''}`.trim() ||
+                         `Member ${member.id}`
+                }))}
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Search and select a member to be the organization leader (optional)
+              </p>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">

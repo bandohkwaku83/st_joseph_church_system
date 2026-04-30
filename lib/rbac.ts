@@ -52,8 +52,9 @@ export interface StoredUser {
 export const HEAD_PASTOR_ROLE_ID = 'role_head_pastor';
 export const CHURCH_ADMIN_ROLE_ID = 'role_church_admin';
 export const FINANCE_OFFICER_ROLE_ID = 'role_finance_officer';
+export const IT_TEAM_ROLE_ID = '4';
 
-/** Default roles on first load. Includes Head Pastor, Church Admin, and Financial so they always appear in the role dropdown. */
+/** Default roles on first load. Includes Head Pastor, Church Admin, and Financial Officer so they always appear in the role dropdown. */
 export function getDefaultRoles(): Role[] {
   const financePermissions: PermissionKey[] = [
     'dashboard',

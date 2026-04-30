@@ -53,7 +53,7 @@ interface BackendUser {
   id: string | number;
   username: string;
   name?: string; // Optional since your backend doesn't include it
-  role: 'admin' | 'user' | 'church_admin' | 'head_pastor' | 'finance' | 'financial';
+  role: 'admin' | 'user' | 'church_admin' | 'head_pastor' | 'finance' | 'financial' | 'it_team';
   roleId?: string | number; // Can be string or number from backend
   email?: string;
   initials?: string;
@@ -94,14 +94,55 @@ function loadRoles(): Role[] {
     if (raw) {
       const parsed = JSON.parse(raw) as Role[];
       if (Array.isArray(parsed)) {
+        // MIGRATION: Remove any IT Team role that doesn't have ID '4'
+        let cleaned = parsed.filter((role) => {
+          // If it's an IT Team role but doesn't have ID '4', remove it
+          if (role.name === 'IT Team' && role.id !== '4') {
+            console.log('Removing duplicate IT Team role with ID:', role.id);
+            return false;
+          }
+          return true;
+        });
+        
+        // Then deduplicate by ID (keep first occurrence)
+        const seen = new Set<string>();
+        const deduplicated = cleaned.filter((role) => {
+          if (seen.has(role.id)) {
+            console.log('Removing duplicate role with ID:', role.id);
+            return false;
+          }
+          seen.add(role.id);
+          return true;
+        });
+        
+        // Then check for missing default roles
         const defaults = getDefaultRoles();
-        const missing = defaults.filter((d) => !parsed.some((p) => p.id === d.id));
+        const missing = defaults.filter((d) => !deduplicated.some((p) => p.id === d.id));
+        
+        let finalRoles = deduplicated;
         if (missing.length > 0) {
-          const merged = [...parsed, ...missing];
-          localStorage.setItem(STORAGE_KEYS.ROLES, JSON.stringify(merged));
-          return merged;
+          finalRoles = [...deduplicated, ...missing];
         }
-        return parsed;
+        
+        // Check if IT Team with ID '4' exists, if not add it
+        const hasITTeam = finalRoles.some((r) => r.id === '4');
+        if (!hasITTeam) {
+          console.log('Adding IT Team role with ID 4');
+          finalRoles.push({
+            id: '4',
+            name: 'IT Team',
+            permissionKeys: ['dashboard', 'members', 'attendance'],
+            isSystemRole: false,
+          });
+        }
+        
+        // Update localStorage if anything changed
+        if (cleaned.length !== parsed.length || deduplicated.length !== cleaned.length || missing.length > 0 || !hasITTeam) {
+          console.log('Updating localStorage with cleaned roles');
+          localStorage.setItem(STORAGE_KEYS.ROLES, JSON.stringify(finalRoles));
+        }
+        
+        return finalRoles;
       }
     }
   } catch (_) {}
@@ -151,6 +192,8 @@ function backendUserToUser(b: BackendUser): User {
     roleId = HEAD_PASTOR_ROLE_ID;
   } else if (b.role === 'finance' || b.role === 'financial' || b.roleId === '3') {
     roleId = 'role_finance_officer';
+  } else if (b.role === 'it_team' || b.roleId === '4') {
+    roleId = '4'; // IT Team
   } else {
     // Default fallback
     roleId = 'role_church_admin';
@@ -192,6 +235,8 @@ function getRoleNameFromId(roleId: string): string {
       return 'Church Admin';
     case 'role_finance_officer':
       return 'Finance Officer';
+    case '4':
+      return 'IT Team';
     default:
       return 'Church Admin';
   }
@@ -301,6 +346,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const refreshRolesAndUsers = useCallback(() => {
+    // Force deduplicate roles in localStorage
+    if (typeof window !== 'undefined') {
+      const raw = localStorage.getItem(STORAGE_KEYS.ROLES);
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw) as Role[];
+          if (Array.isArray(parsed)) {
+            // Deduplicate by ID, keeping only the first occurrence
+            const seen = new Set<string>();
+            const deduplicated = parsed.filter((role) => {
+              if (seen.has(role.id)) {
+                return false;
+              }
+              seen.add(role.id);
+              return true;
+            });
+            
+            // Save deduplicated roles back to localStorage
+            localStorage.setItem(STORAGE_KEYS.ROLES, JSON.stringify(deduplicated));
+          }
+        } catch (e) {
+          console.error('Failed to deduplicate roles:', e);
+        }
+      }
+    }
     setRoles(loadRoles());
     void fetchUsers();
   }, [fetchUsers]);
@@ -552,8 +622,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         roleId = 'role_church_admin';
       } else if (u.role === 'head_pastor' || u.role === 'admin' || u.roleId === '2') {
         roleId = HEAD_PASTOR_ROLE_ID;
-      } else if (u.role === 'finance' || u.roleId === '3') {
+      } else if (u.role === 'finance' || u.role === 'financial' || u.roleId === '3') {
         roleId = 'role_finance_officer';
+      } else if (u.role === 'it_team' || u.roleId === '4') {
+        roleId = '4'; // IT Team
       } else {
         roleId = 'role_church_admin'; // default
       }
@@ -592,6 +664,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         roleId = HEAD_PASTOR_ROLE_ID;
       } else if (u.role === 'finance' || u.roleId === '3') {
         roleId = 'role_finance_officer';
+      } else if (u.role === 'it_team' || u.roleId === '4') {
+        roleId = '4'; // IT Team
       } else {
         roleId = 'role_church_admin'; // default
       }
@@ -656,6 +730,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         role_id = 2;
       } else if (u.roleId === 'role_finance_officer') {
         role_id = 3;
+      } else if (u.roleId === '4') {
+        role_id = 4; // IT Team
       } else {
         role_id = 1; // default to church admin
       }
@@ -748,6 +824,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         roleId = HEAD_PASTOR_ROLE_ID;
       } else if (u.role === 'finance' || u.roleId === '3') {
         roleId = 'role_finance_officer';
+      } else if (u.role === 'it_team' || u.roleId === '4') {
+        roleId = '4'; // IT Team
       } else {
         roleId = 'role_church_admin'; // default
       }

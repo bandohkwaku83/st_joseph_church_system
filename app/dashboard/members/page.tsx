@@ -11,12 +11,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, Tag, Input, Select, Space, Button as AntButton, Steps, Form, DatePicker, Row, Col, Drawer, Upload, Radio } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import type { UploadFile, UploadProps } from 'antd';
+import type { UploadFile } from 'antd';
 import { SearchOutlined, FilterOutlined, DownloadOutlined, EyeOutlined, EditOutlined, UploadOutlined, CameraOutlined, UserOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useAuth } from '@/lib/auth-context';
 import { useToast } from '@/lib/toast-context';
-import { apiRequest, getApiBase } from '@/lib/api';
+import { apiRequest, getServerBase } from '@/lib/api';
 
 type Gender = 'male' | 'female' | 'child';
 type Status = 'Active' | 'Inactive';
@@ -79,6 +79,7 @@ interface Member {
   otherNames?: string;
   dateOfBirth?: string;
   maritalStatus?: string;
+  nationality?: string;
   hometown?: string;
   region?: string;
   residentialAddress?: string;
@@ -95,7 +96,12 @@ interface Member {
   confirmed?: boolean;
   confirmationDate?: string;
   confirmationPlace?: string;
-  organisations?: string[]; // Array of selected organisations
+  organisations?: Array<{
+    id: number;
+    name: string;
+    role: string;
+    joined_at: string;
+  }>;
   otherOrganisation?: string;
   occupation?: string;
   placeOfWork?: string;
@@ -135,11 +141,13 @@ export default function MembersPage() {
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [organizations, setOrganizations] = useState<{ id: number; name: string }[]>([]);
 
   // Backend member interface to match API response
   interface BackendMember {
     id: number;
     parish_number: string;
+    profile_pic?: string;
     surname: string;
     other_names: string;
     gender: 'male' | 'female';
@@ -167,7 +175,14 @@ export default function MembersPage() {
     occupation: string;
     place_of_work_or_school: string;
     skills_or_talent: string;
-    organisation_and_details: Record<string, any>;
+    organisations?: Array<{
+      id: number;
+      name: string;
+      status: string;
+      description: string;
+      role: string;
+      joined_at: string;
+    }>;
     next_of_kin: {
       name: string;
       relationship: string;
@@ -233,6 +248,7 @@ export default function MembersPage() {
       otherNames: backendMember.other_names,
       dateOfBirth: backendMember.date_of_birth,
       maritalStatus: backendMember.marital_status,
+      nationality: backendMember.nationality,
       hometown: backendMember.hometown,
       region: backendMember.region,
       residentialAddress: backendMember.residential_address,
@@ -252,11 +268,21 @@ export default function MembersPage() {
       occupation: backendMember.occupation,
       placeOfWork: backendMember.place_of_work_or_school,
       skillsTalents: backendMember.skills_or_talent,
-      organisations: [], // TODO: Parse organisation_and_details if needed
+      organisations: backendMember.organisations?.map(org => ({
+        id: org.id,
+        name: org.name,
+        role: org.role,
+        joined_at: org.joined_at,
+      })) || [],
       nextOfKinName: backendMember.next_of_kin?.name,
       nextOfKinRelationship: backendMember.next_of_kin?.relationship,
       nextOfKinPhone: backendMember.next_of_kin?.mobile_number,
       nextOfKinAddress: backendMember.next_of_kin?.address,
+      profileImage: backendMember.profile_pic 
+        ? (backendMember.profile_pic.startsWith('data:') 
+            ? backendMember.profile_pic 
+            : `${getServerBase()}${backendMember.profile_pic}`)
+        : undefined,
     };
   };
 
@@ -296,9 +322,36 @@ export default function MembersPage() {
     }
   };
 
-  // Fetch members on component mount
+  // Fetch organizations from API
+  const fetchOrganizations = async () => {
+    try {
+      const token = localStorage.getItem('auth_token');
+      if (!token) {
+        console.warn('No auth token found for fetching organizations');
+        return;
+      }
+
+      const response = await apiRequest<{ organisations: { id: number; name: string; description: string }[] }>('/organisations', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (response.data && response.data.organisations) {
+        const orgs = response.data.organisations.map(org => ({ id: org.id, name: org.name }));
+        setOrganizations(orgs);
+      } else if (response.error) {
+        console.error('Error fetching organizations:', response.error);
+      }
+    } catch (error) {
+      console.error('Error fetching organizations:', error);
+    }
+  };
+
+  // Fetch members and organizations on component mount
   useEffect(() => {
     fetchMembers();
+    fetchOrganizations();
   }, []);
 
   // Scroll drawer content to top when step changes so the current step is visible
@@ -367,6 +420,7 @@ export default function MembersPage() {
       dateOfBirth: member.dateOfBirth ? dayjs(member.dateOfBirth) : undefined,
       age: calculatedAge,
       maritalStatus: member.maritalStatus,
+      nationality: member.nationality,
       hometown: member.hometown,
       region: member.region,
       occupation: member.occupation,
@@ -385,6 +439,7 @@ export default function MembersPage() {
       dateJoinedSociety: member.dateJoinedSociety ? dayjs(member.dateJoinedSociety) : undefined,
       transferredFromAnotherSociety: member.transferredFromAnotherSociety,
       formerSocietyName: member.formerSocietyName,
+      organisations: member.organisations?.map(org => org.id) || [],
       baptised: member.baptised,
       baptismDate: member.baptismDate ? dayjs(member.baptismDate) : undefined,
       baptismPlace: member.baptismPlace,
@@ -744,7 +799,7 @@ export default function MembersPage() {
                   return undefined;
                 };
 
-                // Helper function to clean payload (remove undefined/null/empty values, but keep required fields)
+                // Helper function to clean payload (remove undefined/null/empty values, but keep required fields and arrays)
                 const cleanPayload = (obj: any): any => {
                   const cleaned: any = {};
                   const requiredFields = [
@@ -755,7 +810,12 @@ export default function MembersPage() {
                   ];
                   
                   for (const [key, value] of Object.entries(obj)) {
-                    if (typeof value === 'object' && !Array.isArray(value) && value !== null) {
+                    if (Array.isArray(value)) {
+                      // Keep arrays (including empty ones if they were explicitly set)
+                      if (value.length > 0) {
+                        cleaned[key] = value;
+                      }
+                    } else if (typeof value === 'object' && value !== null) {
                       const cleanedNested = cleanPayload(value);
                       if (Object.keys(cleanedNested).length > 0) {
                         cleaned[key] = cleanedNested;
@@ -770,11 +830,13 @@ export default function MembersPage() {
                 // Prepare the API payload according to the backend structure
                 const memberPayload = cleanPayload({
                   member: {
+                    profile_pic: values.profileImage || undefined,
                     surname: values.surname,
                     other_names: values.otherNames,
                     gender: values.gender || 'male',
                     date_of_birth: formatDate(values.dateOfBirth),
                     marital_status: values.maritalStatus,
+                    nationality: values.nationality || 'Ghanaian',
                     hometown: values.hometown,
                     region: values.region,
                     residential_address: values.residentialAddress,
@@ -800,8 +862,22 @@ export default function MembersPage() {
                     next_of_kin_relationship: values.nextOfKinRelationship,
                     next_of_kin_mobile_number: values.nextOfKinPhone,
                     next_of_kin_address: values.nextOfKinAddress,
+                    organisation_ids: values.organisations && values.organisations.length > 0 ? values.organisations : undefined,
                   }
                 });
+
+                console.log('=== MEMBER PAYLOAD BEING SENT ===');
+                // Log payload with truncated profile_pic for readability
+                const payloadForLog = JSON.parse(JSON.stringify(memberPayload));
+                if (payloadForLog.member?.profile_pic) {
+                  const picLength = payloadForLog.member.profile_pic.length;
+                  payloadForLog.member.profile_pic = `[BASE64 IMAGE - ${picLength} characters]`;
+                }
+                console.log(JSON.stringify(payloadForLog, null, 2));
+                console.log('=== END PAYLOAD ===');
+                if (memberPayload.member?.profile_pic) {
+                  console.log(`Profile picture included: ${memberPayload.member.profile_pic.substring(0, 50)}... (${memberPayload.member.profile_pic.length} total characters)`);
+                }
 
                 // Get authentication token
                 const token = localStorage.getItem('auth_token');
@@ -833,6 +909,10 @@ export default function MembersPage() {
                 }
 
                 if (response.error) {
+                  console.error('=== MEMBER REGISTRATION ERROR ===');
+                  console.error('Error object:', response.error);
+                  console.error('Error message:', response.error.message);
+                  console.error('=== END ERROR ===');
                   throw new Error(response.error.message || `Failed to ${editingMember ? 'update' : 'register'} member`);
                 }
 
@@ -855,7 +935,6 @@ export default function MembersPage() {
                 );
 
               } catch (error) {
-                console.error(`Error ${editingMember ? 'updating' : 'registering'} member:`, error);
                 // Show error message
                 showToast(
                   error instanceof Error ? error.message : `Failed to ${editingMember ? 'update' : 'register'} member`,
@@ -915,7 +994,8 @@ export default function MembersPage() {
                           reader.onloadend = () => {
                             const base64String = reader.result as string;
                             setProfileImagePreview(base64String);
-                            form.setFieldValue('profileImage', base64String);
+                            // Use setFieldsValue to avoid circular reference warning
+                            form.setFieldsValue({ profileImage: base64String });
                             setFileList([
                               {
                                 uid: String(Date.now()),
@@ -941,7 +1021,8 @@ export default function MembersPage() {
                           reader.onloadend = () => {
                             const base64String = reader.result as string;
                             setProfileImagePreview(base64String);
-                            form.setFieldValue('profileImage', base64String);
+                            // Use setFieldsValue to avoid circular reference warning
+                            form.setFieldsValue({ profileImage: base64String });
                           };
                           reader.readAsDataURL(file);
                           return false; // Prevent automatic upload
@@ -949,7 +1030,7 @@ export default function MembersPage() {
                         onRemove={() => {
                           setProfileImagePreview(null);
                           setFileList([]);
-                          form.setFieldValue('profileImage', null);
+                          form.setFieldsValue({ profileImage: null });
                           return true;
                         }}
                         onChange={(info) => {
@@ -1061,6 +1142,15 @@ export default function MembersPage() {
                     <Radio value="widowed">Widowed</Radio>
                   </Radio.Group>
                     </Form.Item>
+
+                <Form.Item
+                  label="Nationality"
+                  name="nationality"
+                  rules={[{ required: true, message: 'Please enter nationality' }]}
+                  initialValue="Ghanaian"
+                >
+                  <Input placeholder="Enter nationality" size="large" />
+                </Form.Item>
 
                 <Row gutter={16}>
                   <Col xs={24} sm={12}>
@@ -1198,6 +1288,26 @@ export default function MembersPage() {
                         ) : null
                       }
                     </Form.Item>
+
+                    <Form.Item
+                      label="Organizations (Optional)"
+                      name="organisations"
+                      tooltip="Select the organizations this member belongs to"
+                    >
+                      <Select
+                        mode="multiple"
+                        placeholder="Search and select organizations..."
+                        allowClear
+                        showSearch
+                        optionFilterProp="label"
+                        size="large"
+                        className="w-full"
+                        options={organizations.map(org => ({
+                          value: org.id,
+                          label: org.name
+                        }))}
+                      />
+                    </Form.Item>
                   </div>
                 </div>
 
@@ -1294,12 +1404,11 @@ export default function MembersPage() {
             {/* Step 2: Occupation & Details */}
             <div style={{ display: currentStep === 1 ? 'block' : 'none' }} key="step-2" className="space-y-6">
                 <div>
-                  <h4 className="text-base font-semibold text-gray-900 mb-4">OCCUPATION & SKILLS</h4>
+                  <h4 className="text-base font-semibold text-gray-900 mb-4">OCCUPATION & SKILLS (OPTIONAL)</h4>
                   <div className="space-y-4">
                       <Form.Item
                       label="Occupation"
                       name="occupation"
-                      rules={[{ required: true, message: 'Please enter occupation' }]}
                       >
                       <Input placeholder="Enter occupation" size="large" />
                       </Form.Item>
@@ -1307,7 +1416,6 @@ export default function MembersPage() {
                       <Form.Item
                       label="Place of Work/School"
                       name="placeOfWork"
-                      rules={[{ required: true, message: 'Please enter place of work or school' }]}
                       >
                       <Input placeholder="Enter place of work or school" size="large" />
                       </Form.Item>
@@ -1315,7 +1423,6 @@ export default function MembersPage() {
                       <Form.Item
                       label="Skills/Talents (e.g. music, teaching, IT, carpentry)"
                       name="skillsTalents"
-                      rules={[{ required: true, whitespace: true, message: 'Please enter skills or talents' }]}
                       >
                       <Input.TextArea rows={3} placeholder="Enter skills and talents" size="large" />
                       </Form.Item>
@@ -1400,9 +1507,6 @@ export default function MembersPage() {
           ]);
         } else if (currentStep === 1) {
           await form.validateFields([
-            'occupation',
-            'placeOfWork',
-            'skillsTalents',
             'nextOfKinName',
             'nextOfKinRelationship',
             'nextOfKinPhone',
@@ -1529,7 +1633,13 @@ export default function MembersPage() {
                     label="Date of Birth" 
                     value={selectedMember.dateOfBirth ? dayjs(selectedMember.dateOfBirth).format('DD MMMM YYYY') : undefined} 
                   />
-                  <InfoRow label="Age" value={selectedMember.age ? `${selectedMember.age} years` : undefined} />
+                  <InfoRow 
+                    label="Age" 
+                    value={selectedMember.dateOfBirth 
+                      ? `${dayjs().diff(dayjs(selectedMember.dateOfBirth), 'year')} years` 
+                      : undefined
+                    } 
+                  />
                   <InfoRow 
                     label="Marital Status" 
                     value={selectedMember.maritalStatus ? selectedMember.maritalStatus.charAt(0).toUpperCase() + selectedMember.maritalStatus.slice(1) : undefined} 
@@ -1580,12 +1690,30 @@ export default function MembersPage() {
                     value={selectedMember.transferredFromAnotherSociety !== undefined ? (selectedMember.transferredFromAnotherSociety ? 'Yes' : 'No') : undefined} 
                   />
                   <InfoRow label="Former Society Name" value={selectedMember.formerSocietyName} />
-                  <InfoRow 
-                    label="Organizations" 
-                    value={selectedMember.organisations && selectedMember.organisations.length > 0 ? selectedMember.organisations.join(', ') : undefined} 
-                    breakWords 
-                  />
-                  <InfoRow label="Other Organization" value={selectedMember.otherOrganisation} />
+                  {selectedMember.organisations && selectedMember.organisations.length > 0 && (
+                    <div className="py-2 border-b border-gray-100">
+                      <span className="text-sm text-gray-600">Organizations</span>
+                      <div className="mt-2 space-y-2">
+                        {selectedMember.organisations.map((org) => (
+                          <div key={org.id} className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                            <div className="flex items-start justify-between">
+                              <div className="flex-1">
+                                <p className="text-sm font-semibold text-blue-900">{org.name}</p>
+                                <div className="flex items-center gap-3 mt-1">
+                                  <span className="text-xs text-blue-700">
+                                    Role: <span className="font-medium capitalize">{org.role}</span>
+                                  </span>
+                                  <span className="text-xs text-blue-700">
+                                    Joined: <span className="font-medium">{dayjs(org.joined_at).format('DD MMM YYYY')}</span>
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
 
