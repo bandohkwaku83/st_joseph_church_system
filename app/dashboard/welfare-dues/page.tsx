@@ -10,6 +10,7 @@ import type { ColumnsType } from 'antd/es/table';
 import { useAuth } from '@/lib/auth-context';
 import { useToast } from '@/lib/toast-context';
 import { apiRequest } from '@/lib/api';
+import { TABLE_SCROLL, useDrawerWidth } from '@/lib/responsive';
 
 interface Member {
   id: number;
@@ -67,6 +68,8 @@ const YEAR_OPTIONS = Array.from({ length: 6 }, (_, idx) => CURRENT_YEAR - 2 + id
 // Members will be fetched from API
 
 export default function WelfareDuesPage() {
+  const drawerWidthMd = useDrawerWidth(560);
+  const drawerWidthLg = useDrawerWidth(700);
   const { hasPermission, isSuperAdmin } = useAuth();
   const { showToast } = useToast();
   const [selectedYear, setSelectedYear] = useState<number>(CURRENT_YEAR);
@@ -417,15 +420,15 @@ export default function WelfareDuesPage() {
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Welfare/Dues Management</h1>
-          <p className="text-gray-600 mt-1">
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Welfare/Dues Management</h1>
+          <p className="text-sm sm:text-base text-gray-600 mt-1">
             Record monthly payments, track member history, view contribution reports, and identify outstanding dues.
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
           <Button onClick={async () => {
             setLoading(true);
             setError(null);
@@ -437,7 +440,7 @@ export default function WelfareDuesPage() {
             } finally {
               setLoading(false);
             }
-          }} variant="outline" disabled={loading}>
+          }} variant="outline" disabled={loading} className="w-full sm:w-auto">
             Refresh
           </Button>
           {(hasPermission('record_income') || hasPermission('expenditure') || isSuperAdmin) && (
@@ -554,7 +557,7 @@ export default function WelfareDuesPage() {
               <CardTitle>Individual Monthly Contributions</CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="flex justify-end">
+              <div className="flex justify-stretch sm:justify-end">
                 <Select
                   size="large"
                   value={statusFilter}
@@ -564,14 +567,15 @@ export default function WelfareDuesPage() {
                     { value: 'Paid', label: 'Paid' },
                     { value: 'Outstanding', label: 'Outstanding' },
                   ]}
-                  style={{ width: 220 }}
+                  className="w-full sm:w-[220px]"
                 />
               </div>
               <Table
+                scroll={TABLE_SCROLL}
                 columns={monthlyColumns}
                 dataSource={filteredMonthlyMemberSummary}
                 rowKey="id"
-                pagination={{ pageSize: 8 }}
+                pagination={{ pageSize: 8, responsive: true }}
               />
             </CardContent>
           </Card>
@@ -586,7 +590,7 @@ export default function WelfareDuesPage() {
           setShowPaymentDrawer(false);
           form.resetFields();
         }}
-        width={typeof window !== 'undefined' && window.innerWidth < 640 ? '100%' : 560}
+        width={drawerWidthMd}
         afterOpenChange={(open) => {
           if (open && members.length > 0) {
             // Reset form with updated initial values when drawer opens
@@ -705,13 +709,14 @@ export default function WelfareDuesPage() {
           setShowMemberHistoryDrawer(false);
           setSelectedMember(null);
         }}
-        width={typeof window !== 'undefined' && window.innerWidth < 640 ? '100%' : 700}
+        width={drawerWidthLg}
       >
         <Table
+          scroll={TABLE_SCROLL}
           columns={memberContributionColumns}
           dataSource={selectedMemberContributions}
           rowKey="id"
-          pagination={{ pageSize: 10 }}
+          pagination={{ pageSize: 10, responsive: true }}
         />
       </Drawer>
     </div>

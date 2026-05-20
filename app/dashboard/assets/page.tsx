@@ -15,6 +15,7 @@ import { SearchOutlined, EditOutlined, EyeOutlined, PlusOutlined, LoadingOutline
 import { useAuth } from '@/lib/auth-context';
 import { useToast } from '@/lib/toast-context';
 import { apiRequest } from '@/lib/api';
+import { TABLE_SCROLL, useDrawerWidth } from '@/lib/responsive';
 
 interface Asset {
   id: number;
@@ -41,6 +42,7 @@ interface AssetResponse {
 }
 
 export default function AssetsPage() {
+  const drawerWidthMd = useDrawerWidth(600);
   const { hasPermission, isSuperAdmin } = useAuth();
   const { showToast } = useToast();
   const [showAddModal, setShowAddModal] = useState(false);
@@ -440,6 +442,7 @@ export default function AssetsPage() {
             </div>
           ) : (
             <Table
+              scroll={TABLE_SCROLL}
               columns={columns}
               dataSource={filteredAssets}
               rowKey="id"
@@ -457,7 +460,7 @@ export default function AssetsPage() {
       <Drawer
         title="Add Asset/Equipment"
         placement="right"
-        width={typeof window !== 'undefined' && window.innerWidth < 640 ? '100%' : 600}
+        width={drawerWidthMd}
         open={showAddModal}
         onClose={() => {
           setShowAddModal(false);
@@ -579,7 +582,7 @@ export default function AssetsPage() {
       <Drawer
         title="Asset Details"
         placement="right"
-        width={typeof window !== 'undefined' && window.innerWidth < 640 ? '100%' : 600}
+        width={drawerWidthMd}
         open={showViewModal}
         onClose={() => {
           setShowViewModal(false);
@@ -666,7 +669,7 @@ export default function AssetsPage() {
       <Drawer
         title="Edit Asset/Equipment"
         placement="right"
-        width={typeof window !== 'undefined' && window.innerWidth < 640 ? '100%' : 600}
+        width={drawerWidthMd}
         open={showEditModal}
         onClose={() => {
           setShowEditModal(false);

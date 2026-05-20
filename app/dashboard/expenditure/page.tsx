@@ -9,6 +9,7 @@ import { Table, Tag, Space, Button as AntButton, Input as AntInput, Drawer } fro
 import type { ColumnsType } from 'antd/es/table';
 import { SearchOutlined, DownloadOutlined, EditOutlined, EyeOutlined } from '@ant-design/icons';
 import { useAuth } from '@/lib/auth-context';
+import { useDrawerWidth } from '@/lib/responsive';
 
 interface ExpenditureEntry {
   id: string;
@@ -22,6 +23,7 @@ interface ExpenditureEntry {
 }
 
 export default function ExpenditurePage() {
+  const drawerWidthSm = useDrawerWidth(400);
   const { hasPermission, isSuperAdmin } = useAuth();
   const [showExpenditureModal, setShowExpenditureModal] = useState(false);
   const [showDetailsDrawer, setShowDetailsDrawer] = useState(false);
@@ -284,7 +286,7 @@ export default function ExpenditurePage() {
           </div>
         }
         placement="right"
-        width={typeof window !== 'undefined' && window.innerWidth < 640 ? '100%' : 400}
+        width={drawerWidthSm}
         onClose={() => setShowExpenditureModal(false)}
         open={showExpenditureModal}
         styles={{
@@ -479,7 +481,7 @@ export default function ExpenditurePage() {
           </div>
         }
         placement="right"
-        width={typeof window !== 'undefined' && window.innerWidth < 640 ? '100%' : 400}
+        width={drawerWidthSm}
         onClose={() => {
           setShowDetailsDrawer(false);
           setSelectedEntry(null);

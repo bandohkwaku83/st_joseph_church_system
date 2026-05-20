@@ -17,6 +17,7 @@ import dayjs from 'dayjs';
 import { useAuth } from '@/lib/auth-context';
 import { useToast } from '@/lib/toast-context';
 import { apiRequest, getServerBase } from '@/lib/api';
+import { useDrawerWidth } from '@/lib/responsive';
 
 type Gender = 'male' | 'female' | 'child';
 type Status = 'Active' | 'Inactive';
@@ -114,6 +115,8 @@ interface Member {
 }
 
 export default function MembersPage() {
+  const drawerWidthMd = useDrawerWidth(600);
+  const drawerWidthLg = useDrawerWidth(700);
   const { hasPermission, isSuperAdmin } = useAuth();
   const { showToast } = useToast();
   const [showModal, setShowModal] = useState(false);
@@ -665,16 +668,16 @@ export default function MembersPage() {
           <p className="text-sm sm:text-base text-gray-600 mt-1">Manage parish members and their information</p>
         </div>
         {(hasPermission('members') || isSuperAdmin) && (
-          <div className="flex gap-2">
+          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
             <Button 
               onClick={fetchMembers} 
               variant="outline" 
               disabled={loading}
-              className="shadow-lg"
+              className="shadow-lg w-full sm:w-auto"
             >
               {loading ? 'Loading...' : 'Refresh'}
             </Button>
-            <Button onClick={openAddMember} className="shadow-lg">
+            <Button onClick={openAddMember} className="shadow-lg w-full sm:w-auto">
               <HiUserAdd className="h-4 w-4 mr-2" />
               Register New Member
             </Button>
@@ -683,7 +686,7 @@ export default function MembersPage() {
       </div>
 
       {/* Stats Cards - Matching Dashboard Style */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
         {stats.map((stat, index) => {
           const Icon = stat.icon;
           const pattern = patternStyles[index % patternStyles.length];
@@ -746,9 +749,9 @@ export default function MembersPage() {
       {/* Members Table - Using Ant Design Table */}
       <Card className="relative overflow-hidden">
         <CardHeader className="pb-4 relative z-10">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <CardTitle className="text-base font-semibold text-gray-900">Members</CardTitle>
-            <Button variant="outline" size="sm">
+            <Button variant="outline" size="sm" className="w-full sm:w-auto">
               <DownloadOutlined className="mr-2" />
               Export
             </Button>
@@ -807,7 +810,7 @@ export default function MembersPage() {
           </div>
         }
         placement="right"
-        width={typeof window !== 'undefined' && window.innerWidth < 640 ? '100%' : 600}
+        width={drawerWidthMd}
         onClose={() => {
           setShowModal(false);
           setCurrentStep(0);
@@ -1612,7 +1615,7 @@ export default function MembersPage() {
         </div>
         }
         placement="right"
-        width={typeof window !== 'undefined' && window.innerWidth < 640 ? '100%' : 700}
+        width={drawerWidthLg}
         onClose={() => {
           setShowMemberDetail(false);
           setSelectedMember(null);

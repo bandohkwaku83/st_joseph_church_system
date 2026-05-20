@@ -31,6 +31,7 @@ import dayjs, { Dayjs } from "dayjs";
 import { useAuth } from "@/lib/auth-context";
 import { useToast } from "@/lib/toast-context";
 import { apiRequest } from "@/lib/api";
+import { useDrawerWidth } from "@/lib/responsive";
 
 
 
@@ -83,6 +84,7 @@ const PATTERN_STYLES = [
 
 
 export default function AttendancePage() {
+  const drawerWidthMd = useDrawerWidth(600);
   const { hasPermission, isSuperAdmin } = useAuth();
   const { showToast } = useToast();
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
@@ -478,7 +480,7 @@ export default function AttendancePage() {
             </div>
           }
           placement="right"
-          width={typeof window !== 'undefined' && window.innerWidth < 640 ? '100%' : 600}
+          width={drawerWidthMd}
           onClose={handleCloseModal}
           open={showRecordModal}
         >

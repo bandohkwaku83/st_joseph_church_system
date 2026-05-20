@@ -15,6 +15,7 @@ import { SearchOutlined, EditOutlined, EyeOutlined, PlusOutlined, LoadingOutline
 import { useAuth } from '@/lib/auth-context';
 import { useToast } from '@/lib/toast-context';
 import { apiRequest } from '@/lib/api';
+import { TABLE_SCROLL, useDrawerWidth } from '@/lib/responsive';
 
 interface Department {
   id: number;
@@ -73,6 +74,7 @@ interface CreateOrganizationPayload {
 }
 
 export default function DepartmentsPage() {
+  const drawerWidthMd = useDrawerWidth(600);
   const router = useRouter();
   const searchParams = useSearchParams();
   const { hasRole, hasPermission, isSuperAdmin } = useAuth();
@@ -531,6 +533,7 @@ export default function DepartmentsPage() {
           </CardHeader>
           <CardContent className="relative z-10">
             <Table
+              scroll={TABLE_SCROLL}
               columns={roleColumns}
               dataSource={roles}
               rowKey={(record) => `role-${record.role}`}
@@ -553,7 +556,7 @@ export default function DepartmentsPage() {
         }}
         title="Organization Details"
         placement="right"
-        width={typeof window !== 'undefined' && window.innerWidth < 640 ? '100%' : 600}
+        width={drawerWidthMd}
       >
         {selectedOrganization && (
           <div className="p-4 sm:p-6">
@@ -606,6 +609,7 @@ export default function DepartmentsPage() {
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Members</h3>
                 {selectedOrganization.members && selectedOrganization.members.length > 0 ? (
                   <Table
+                    scroll={TABLE_SCROLL}
                     columns={[
                       {
                         title: 'Member',
@@ -691,7 +695,7 @@ export default function DepartmentsPage() {
         }}
         title="Manage Organization"
         placement="right"
-        width={typeof window !== 'undefined' && window.innerWidth < 640 ? '100%' : 600}
+        width={drawerWidthMd}
       >
         {managingOrganization && (
           <div className="p-4 sm:p-6">
@@ -901,7 +905,7 @@ export default function DepartmentsPage() {
         onClose={() => setShowModal(false)}
         title="Create New Organization"
         placement="right"
-        width={typeof window !== 'undefined' && window.innerWidth < 640 ? '100%' : 600}
+        width={drawerWidthMd}
       >
         <div className="p-4 sm:p-6">
           <form 

@@ -48,12 +48,63 @@
   --color-green-900: #01223b;
 }
 
+html {
+  overflow-x: hidden;
+}
+
 body {
   background: #f9fafb;
   color: var(--foreground);
   font-family: var(--font-inter), -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+}
+
+/* Mobile-friendly tables and touch targets */
+@media (max-width: 1023px) {
+  main .ant-table-wrapper {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  main .ant-table {
+    min-width: max-content;
+  }
+
+  main .ant-pagination {
+    flex-wrap: wrap;
+    row-gap: 0.5rem;
+  }
+
+  main .ant-drawer-body {
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  }
+}
+
+/* Scrollable horizontal tab bars */
+.mobile-tabs-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.mobile-tabs-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.mobile-tabs-nav {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 0.5rem;
+  min-width: min-content;
+  padding-bottom: 1px;
+}
+
+@media (min-width: 640px) {
+  .mobile-tabs-nav {
+    gap: 2rem;
+  }
 }
 
 /* Override Ant Design green colors to use primary color */

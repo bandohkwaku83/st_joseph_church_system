@@ -20,6 +20,7 @@ import { SearchOutlined, FilterOutlined, DownloadOutlined, EyeOutlined, SendOutl
 import { useAuth } from '@/lib/auth-context';
 import { useToast } from '@/lib/toast-context';
 import { apiRequest } from '@/lib/api';
+import { TABLE_SCROLL, useDrawerWidth } from '@/lib/responsive';
 
 interface SMSMessage {
   id: number;
@@ -81,6 +82,7 @@ interface BackendScheduledSMS {
 }
 
 export default function CommunicationPage() {
+  const drawerWidthMd = useDrawerWidth(600);
   const { hasPermission, isSuperAdmin } = useAuth();
   const { showToast } = useToast();
   const [showSendModal, setShowSendModal] = useState(false);
@@ -831,12 +833,12 @@ export default function CommunicationPage() {
           </h1>
           <p className="text-gray-600 mt-1">Send and manage SMS messages to parish members</p>
         </div>
-        <div className="flex gap-3">
-          <Button variant="outline" onClick={() => setShowScheduleModal(true)}>
+        <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 w-full sm:w-auto">
+          <Button variant="outline" onClick={() => setShowScheduleModal(true)} className="w-full sm:w-auto">
             <HiOutlineCalendar className="h-4 w-4 mr-2" />
             Schedule SMS
           </Button>
-          <Button onClick={() => setShowSendModal(true)} className="shadow-lg">
+          <Button onClick={() => setShowSendModal(true)} className="shadow-lg w-full sm:w-auto">
             <SendOutlined className="mr-2" />
             Send SMS
           </Button>
@@ -844,7 +846,7 @@ export default function CommunicationPage() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
         {stats.map((stat, index) => {
           const Icon = stat.icon;
           const pattern = patternStyles[index % patternStyles.length];
@@ -945,7 +947,7 @@ export default function CommunicationPage() {
                 .map((scheduled) => (
             <div
                   key={scheduled.id}
-              className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+              className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
             >
               <div className="flex items-center gap-4">
                 <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
@@ -974,24 +976,24 @@ export default function CommunicationPage() {
       {/* Recent Messages Table */}
       <Card className="relative overflow-hidden">
         <CardHeader className="pb-4 relative z-10">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
             <CardTitle className="text-base font-semibold text-gray-900">Recent Messages</CardTitle>
-            <Space>
+            <Space className="flex flex-col w-full sm:flex-row sm:w-auto [&_.ant-space-item]:w-full sm:[&_.ant-space-item]:w-auto">
               <Input
                 placeholder="Search messages..."
                 prefix={<SearchOutlined />}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                style={{ width: 250 }}
+                className="w-full sm:!w-[250px]"
               />
-              <Button variant="outline" size="sm" onClick={fetchSMSMessages} disabled={loading}>
+              <Button variant="outline" size="sm" onClick={fetchSMSMessages} disabled={loading} className="w-full sm:w-auto">
                 {loading ? 'Loading...' : 'Refresh'}
               </Button>
-              <Button variant="outline" size="sm">
+              <Button variant="outline" size="sm" className="w-full sm:w-auto">
                 <FilterOutlined className="mr-2" />
                 Filter
               </Button>
-              <Button variant="outline" size="sm">
+              <Button variant="outline" size="sm" className="w-full sm:w-auto">
                 <DownloadOutlined className="mr-2" />
                 Export
               </Button>
@@ -1009,6 +1011,7 @@ export default function CommunicationPage() {
             </div>
           ) : (
             <Table
+              scroll={TABLE_SCROLL}
               columns={columns}
               dataSource={filteredMessages}
               rowKey="id"
@@ -1068,7 +1071,7 @@ export default function CommunicationPage() {
         }}
         title="Send SMS"
         placement="right"
-        width={typeof window !== 'undefined' && window.innerWidth < 640 ? '100%' : 600}
+        width={drawerWidthMd}
       >
         <div className="p-4 sm:p-6">
           <Form
@@ -1185,7 +1188,7 @@ export default function CommunicationPage() {
         }}
         title="Schedule SMS"
         placement="right"
-        width={typeof window !== 'undefined' && window.innerWidth < 640 ? '100%' : 600}
+        width={drawerWidthMd}
       >
         <div className="p-4 sm:p-6">
           <Form

@@ -873,7 +873,7 @@ export default function Dashboard() {
             </CardHeader>
             <CardContent className="relative z-10">
               <div className="space-y-4">
-                <div className="grid grid-cols-3 gap-2 sm:gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
                   <div>
                     <p className="text-xs text-gray-600 mb-1">Total Members</p>
                     <p className="text-xl sm:text-2xl font-semibold text-gray-900">{memberStats.total}</p>
@@ -1512,7 +1512,7 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent className="relative z-10">
             <div className="space-y-4">
-              <div className="grid grid-cols-3 gap-2 sm:gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
                 <div>
                   <p className="text-xs text-gray-600 mb-1">Total</p>
                   <p className="text-xl sm:text-2xl font-semibold text-gray-900">{executiveStats.members.total}</p>
@@ -1553,7 +1553,7 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent className="relative z-10">
             <div className="space-y-4">
-              <div className="grid grid-cols-3 gap-2 sm:gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
                 <div>
                   <p className="text-xs text-gray-600 mb-1">This Month</p>
                   <p className="text-xl sm:text-2xl font-semibold text-gray-900">{executiveStats.attendance.totalThisMonth.toLocaleString()}</p>

@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Table, Tag, Space, Button as AntButton, Drawer } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { DownloadOutlined, EyeOutlined } from '@ant-design/icons';
+import { TABLE_SCROLL, useDrawerWidth } from '@/lib/responsive';
 
 interface PaymentVoucher {
   id: number;
@@ -20,6 +21,7 @@ interface PaymentVoucher {
 }
 
 export default function PaymentVouchersPage() {
+  const drawerWidthMd = useDrawerWidth(600);
   const [showVoucherModal, setShowVoucherModal] = useState(false);
 
   const [vouchers, setVouchers] = useState<PaymentVoucher[]>([
@@ -92,7 +94,7 @@ export default function PaymentVouchersPage() {
           </h1>
           <p className="text-gray-600 mt-1">Create and manage payment vouchers</p>
         </div>
-        <Button onClick={() => setShowVoucherModal(true)} className="shadow-lg">
+        <Button onClick={() => setShowVoucherModal(true)} className="shadow-lg w-full sm:w-auto">
           <HiPlus className="h-4 w-4 mr-2" />
           Create Voucher
         </Button>
@@ -116,6 +118,7 @@ export default function PaymentVouchersPage() {
         </CardHeader>
         <CardContent className="relative z-10">
           <Table
+            scroll={TABLE_SCROLL}
             columns={voucherColumns}
             dataSource={vouchers}
             rowKey="id"
@@ -134,7 +137,7 @@ export default function PaymentVouchersPage() {
         onClose={() => setShowVoucherModal(false)}
         title="Payment Voucher"
         placement="right"
-        width={typeof window !== 'undefined' && window.innerWidth < 640 ? '100%' : 600}
+        width={drawerWidthMd}
       >
         <form className="p-4 sm:p-6 space-y-4">
           <div className="border-b-2 border-dashed border-gray-300 pb-4 mb-4">
@@ -190,7 +193,7 @@ export default function PaymentVouchersPage() {
               </label>
             </div>
           </div>
-          <div className="grid grid-cols-3 gap-4 pt-4 border-t border-gray-200">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4 border-t border-gray-200">
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-2">Received By</label>
               <Input placeholder="Signature" />

@@ -148,25 +148,40 @@ export default function DashboardLayout({
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col overflow-hidden w-full lg:w-auto">
         {/* Top Bar */}
-        <header className="bg-white border-b border-gray-200 h-14 md:h-16 flex items-center justify-between px-3 md:px-4 lg:px-6">
-          {/* Mobile Menu Button - Visible on mobile/tablet */}
-          <button
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="lg:hidden p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
-          >
-            {mobileMenuOpen ? <HiX className="h-5 w-5" /> : <HiMenu className="h-5 w-5" />}
-          </button>
+        <header className="bg-white border-b border-gray-200 h-14 md:h-16 flex items-center justify-between gap-2 px-3 md:px-4 lg:px-6">
+          <div className="flex items-center gap-2 min-w-0 flex-1">
+            {/* Mobile Menu Button - Visible on mobile/tablet */}
+            <button
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="lg:hidden p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0"
+              aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
+            >
+              {mobileMenuOpen ? <HiX className="h-5 w-5" /> : <HiMenu className="h-5 w-5" />}
+            </button>
 
-          <div className="flex items-center gap-2 md:gap-4 flex-1">
-            {/* Search - Hidden on mobile, visible on tablet and up */}
-            <div className="hidden sm:flex items-center gap-2 px-3 md:px-4 py-1.5 md:py-2 bg-gray-50 rounded-lg border border-gray-200 max-w-md flex-1">
-              <HiOutlineSearch className="h-4 w-4 text-gray-400" />
+            {/* Church name on mobile (sidebar hidden) */}
+            <div className="lg:hidden min-w-0 flex-1">
+              <p className="text-sm font-semibold text-gray-900 truncate">St. Joseph Catholic Church</p>
+              <p className="text-xs text-gray-500 truncate">{user.roleName}</p>
+            </div>
+
+            {/* Search - full bar on sm+, icon button on xs */}
+            <div className="hidden sm:flex items-center gap-2 px-3 md:px-4 py-1.5 md:py-2 bg-gray-50 rounded-lg border border-gray-200 max-w-md flex-1 ml-auto">
+              <HiOutlineSearch className="h-4 w-4 text-gray-400 flex-shrink-0" />
               <input
                 type="text"
                 placeholder="Search..."
-                className="bg-transparent border-none outline-none text-sm text-gray-700 placeholder-gray-400 flex-1"
+                className="bg-transparent border-none outline-none text-sm text-gray-700 placeholder-gray-400 flex-1 min-w-0"
               />
             </div>
+            <button
+              type="button"
+              className="sm:hidden p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0"
+              aria-label="Search"
+              title="Search"
+            >
+              <HiOutlineSearch className="h-5 w-5" />
+            </button>
           </div>
 
           {/* Right Side Icons & Profile */}
@@ -178,8 +193,8 @@ export default function DashboardLayout({
             </button>
 
             {/* User Profile */}
-            <div className="flex items-center gap-2 md:gap-3 pl-2 md:pl-3 border-l border-gray-200">
-              <div className="hidden md:block text-right">
+            <div className="flex items-center gap-2 md:gap-3 pl-2 md:pl-3 border-l border-gray-200 flex-shrink-0">
+              <div className="hidden sm:block text-right">
                 <span className="block text-xs md:text-sm font-medium text-gray-900 truncate max-w-[100px] lg:max-w-none">{user.name}</span>
                 <span className="block text-xs text-gray-500">
                   {user.roleName}
@@ -269,7 +284,7 @@ export default function DashboardLayout({
         )}
 
         {/* Page Content */}
-        <main className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-4 md:p-6 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
           {children}
         </main>
       </div>

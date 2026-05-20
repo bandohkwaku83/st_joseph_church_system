@@ -48,8 +48,8 @@ export default function SignInPage() {
       style={{ backgroundImage: "url('/images/background.png')" }}
     >
       <div className="pointer-events-none absolute inset-0 bg-black/10" />
-      <div className="mx-auto flex min-h-[calc(100vh-2rem)] w-full max-w-6xl items-center justify-end">
-        <section className="w-full max-w-[440px] rounded-3xl border border-white bg-white p-7 shadow-2xl sm:p-8">
+      <div className="mx-auto flex min-h-[calc(100vh-2rem)] w-full max-w-6xl items-center justify-center lg:justify-end">
+        <section className="w-full max-w-[440px] rounded-2xl sm:rounded-3xl border border-white bg-white p-5 shadow-2xl sm:p-8">
           <div className="w-full">
             <div className="mb-7 flex items-center gap-3">
               <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white shadow-md">
@@ -66,7 +66,7 @@ export default function SignInPage() {
             </div>
 
             <div className="mb-7">
-              <h1 className="text-3xl font-bold text-slate-900">Login</h1>
+              <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">Login</h1>
               <p className="mt-1.5 text-sm text-slate-600">
                 Sign in to continue to the dashboard.
               </p>

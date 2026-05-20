@@ -9,6 +9,7 @@ import { Table, Tag, Space, Button as AntButton, Input as AntInput, Drawer } fro
 import type { ColumnsType } from 'antd/es/table';
 import { SearchOutlined, DownloadOutlined, EditOutlined, EyeOutlined } from '@ant-design/icons';
 import { useAuth } from '@/lib/auth-context';
+import { useDrawerWidth } from '@/lib/responsive';
 
 interface IncomeEntry {
   id: string;
@@ -21,6 +22,7 @@ interface IncomeEntry {
 }
 
 export default function RecordIncomePage() {
+  const drawerWidthSm = useDrawerWidth(400);
   const { hasPermission, isSuperAdmin } = useAuth();
   const [showIncomeModal, setShowIncomeModal] = useState(false);
   const [showDetailsDrawer, setShowDetailsDrawer] = useState(false);
@@ -274,7 +276,7 @@ export default function RecordIncomePage() {
           </div>
         }
         placement="right"
-        width={typeof window !== 'undefined' && window.innerWidth < 640 ? '100%' : 400}
+        width={drawerWidthSm}
         onClose={() => setShowIncomeModal(false)}
         open={showIncomeModal}
         styles={{
@@ -455,7 +457,7 @@ export default function RecordIncomePage() {
           </div>
         }
         placement="right"
-        width={typeof window !== 'undefined' && window.innerWidth < 640 ? '100%' : 400}
+        width={drawerWidthSm}
         onClose={() => {
           setShowDetailsDrawer(false);
           setSelectedEntry(null);

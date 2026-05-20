@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/auth-context';
 import { useToast } from '@/lib/toast-context';
 import { apiRequest, getApiBase } from '@/lib/api';
+import { TABLE_SCROLL } from '@/lib/responsive';
 
 const MONTHLY_DUES_GHC = 50;
 
@@ -560,8 +561,10 @@ export default function GenerateReportPage() {
       )}
 
       {!loading && !error && welfares.length > 0 && members.length > 0 && (
+        <div className="mobile-tabs-scroll -mx-3 px-3 sm:mx-0 sm:px-0">
         <Tabs
           defaultActiveKey="welfare"
+          className="[&_.ant-tabs-nav]:!mb-0"
           items={[
           {
             key: 'welfare',
@@ -674,6 +677,7 @@ export default function GenerateReportPage() {
                   </CardHeader>
                   <CardContent>
                     <Table
+                      scroll={TABLE_SCROLL}
                       size="small"
                       rowKey="id"
                       columns={welfareMemberColumns}
@@ -692,6 +696,7 @@ export default function GenerateReportPage() {
                       <p className="text-sm text-green-700">No outstanding balances for this period.</p>
                     ) : (
                       <Table
+                        scroll={TABLE_SCROLL}
                         size="small"
                         rowKey="id"
                         columns={welfareMemberColumns.filter((c) => c.key !== 'status')}
@@ -707,7 +712,7 @@ export default function GenerateReportPage() {
                     <CardTitle className="text-base">Payment lines in period</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <Table size="small" rowKey="id" columns={welfarePaymentColumns} dataSource={welfareReport.paymentRows} />
+                    <Table scroll={TABLE_SCROLL} size="small" rowKey="id" columns={welfarePaymentColumns} dataSource={welfareReport.paymentRows} />
                   </CardContent>
                 </Card>
               </div>
@@ -879,6 +884,7 @@ export default function GenerateReportPage() {
           },
         ]}
       />
+        </div>
       )}
     </div>
   );

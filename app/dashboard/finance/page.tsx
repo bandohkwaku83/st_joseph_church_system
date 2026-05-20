@@ -26,6 +26,7 @@ import { Input } from '@/components/ui/input';
 import { Table, Tag, Space, Button as AntButton, Input as AntInput, Select as AntSelect, AutoComplete, Drawer } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { SearchOutlined, DownloadOutlined, EditOutlined, EyeOutlined, PrinterOutlined } from '@ant-design/icons';
+import { TABLE_SCROLL, useDrawerWidth } from '@/lib/responsive';
 
 type TabType = 'input' | 'expenditure' | 'report' | 'payment-vouchers' | 'welfare';
 
@@ -92,6 +93,8 @@ const sampleMembers = [
 
 export default function FinancePage() {
   const searchParams = useSearchParams();
+  const drawerWidthSm = useDrawerWidth(400);
+  const drawerWidthMd = useDrawerWidth(600);
   const [activeTab, setActiveTab] = useState<TabType>('input');
 
   // Set active tab from URL parameter
@@ -802,7 +805,7 @@ export default function FinancePage() {
           </h1>
           <p className="text-gray-600 mt-1">Record income entries and generate financial reports</p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex flex-col sm:flex-row flex-wrap gap-2 sm:gap-3 w-full sm:w-auto">
           {activeTab === 'input' && (
             <Button onClick={() => setShowIncomeModal(true)} className="shadow-lg">
               <HiPlus className="h-4 w-4 mr-2" />
@@ -837,15 +840,15 @@ export default function FinancePage() {
       </div>
 
       {/* Tabs */}
-      <div className="border-b border-gray-200">
-        <nav className="flex space-x-8">
+      <div className="border-b border-gray-200 mobile-tabs-scroll -mx-3 px-3 sm:mx-0 sm:px-0">
+        <nav className="mobile-tabs-nav">
           {tabs.map((tab) => {
             const Icon = tab.icon;
             return (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-2 py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                className={`flex items-center gap-2 py-3 sm:py-4 px-2 sm:px-1 border-b-2 font-medium text-sm whitespace-nowrap transition-colors flex-shrink-0 ${
                   activeTab === tab.id
                     ? 'border-green-600 text-green-600'
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
@@ -908,22 +911,23 @@ export default function FinancePage() {
             }}
           />
           <CardHeader className="pb-4 relative z-10">
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
               <CardTitle className="text-base font-semibold text-gray-900">Income Entries</CardTitle>
-              <Space>
+              <Space className="flex flex-col w-full sm:flex-row sm:w-auto [&_.ant-space-item]:w-full sm:[&_.ant-space-item]:w-auto">
                 <AntInput
                   placeholder="Search by category..."
                   prefix={<SearchOutlined />}
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  style={{ width: 250 }}
+                  className="w-full sm:!w-[250px]"
                 />
-                <AntButton icon={<DownloadOutlined />}>Export</AntButton>
+                <AntButton icon={<DownloadOutlined />} className="w-full sm:w-auto">Export</AntButton>
               </Space>
             </div>
           </CardHeader>
           <CardContent className="relative z-10">
             <Table
+              scroll={TABLE_SCROLL}
               columns={incomeColumns}
               dataSource={filteredEntries}
               rowKey="id"
@@ -947,22 +951,23 @@ export default function FinancePage() {
             }}
           />
           <CardHeader className="pb-4 relative z-10">
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
               <CardTitle className="text-base font-semibold text-gray-900">Expenditure Entries</CardTitle>
-              <Space>
+              <Space className="flex flex-col w-full sm:flex-row sm:w-auto [&_.ant-space-item]:w-full sm:[&_.ant-space-item]:w-auto">
                 <AntInput
                   placeholder="Search by category or payee..."
                   prefix={<SearchOutlined />}
                   value={expenditureSearchTerm}
                   onChange={(e) => setExpenditureSearchTerm(e.target.value)}
-                  style={{ width: 250 }}
+                  className="w-full sm:!w-[250px]"
                 />
-                <AntButton icon={<DownloadOutlined />}>Export</AntButton>
+                <AntButton icon={<DownloadOutlined />} className="w-full sm:w-auto">Export</AntButton>
               </Space>
             </div>
           </CardHeader>
           <CardContent className="relative z-10">
             <Table
+              scroll={TABLE_SCROLL}
               columns={expenditureColumns}
               dataSource={filteredExpenditureEntries}
               rowKey="id"
@@ -1016,6 +1021,7 @@ export default function FinancePage() {
             </CardHeader>
             <CardContent className="relative z-10 p-0">
               <Table
+                scroll={TABLE_SCROLL}
                 columns={reportOrdinaryColumns}
                 dataSource={generateReport.ordinary}
                 rowKey={(record, index) => `${record.category}-${record.subcategory}-${index}`}
@@ -1052,6 +1058,7 @@ export default function FinancePage() {
             </CardHeader>
             <CardContent className="relative z-10 p-0">
               <Table
+                scroll={TABLE_SCROLL}
                 columns={reportSpecialColumns}
                 dataSource={generateReport.special}
                 rowKey={(record, index) => `${record.category}-${record.subcategory}-${index}`}
@@ -1082,7 +1089,7 @@ export default function FinancePage() {
               style={{ backgroundImage: patternStyles[1].background }}
             />
             <CardContent className="p-6 relative z-10">
-              <div className="flex justify-between items-center">
+              <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center">
                 <div>
                   <h3 className="text-lg font-bold text-gray-900">GRAND TOTAL</h3>
                   <p className="text-sm text-gray-600">All Income Sources</p>
@@ -1120,6 +1127,7 @@ export default function FinancePage() {
           </CardHeader>
           <CardContent className="relative z-10">
             <Table
+              scroll={TABLE_SCROLL}
               columns={voucherColumns}
               dataSource={vouchers}
               rowKey="id"
@@ -1143,22 +1151,23 @@ export default function FinancePage() {
             }}
           />
           <CardHeader className="pb-4 relative z-10">
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
               <CardTitle className="text-base font-semibold text-gray-900">Welfare Records</CardTitle>
-              <Space>
+              <Space className="flex flex-col w-full sm:flex-row sm:w-auto [&_.ant-space-item]:w-full sm:[&_.ant-space-item]:w-auto">
                 <AntInput
                   placeholder="Search by member name..."
                   prefix={<SearchOutlined />}
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  style={{ width: 250 }}
+                  className="w-full sm:!w-[250px]"
                 />
-                <AntButton icon={<DownloadOutlined />}>Export</AntButton>
+                <AntButton icon={<DownloadOutlined />} className="w-full sm:w-auto">Export</AntButton>
               </Space>
             </div>
           </CardHeader>
           <CardContent className="relative z-10">
             <Table
+              scroll={TABLE_SCROLL}
               columns={welfareColumns}
               dataSource={welfares.filter(welfare => 
                 !searchTerm || welfare.memberName.toLowerCase().includes(searchTerm.toLowerCase())
@@ -1183,7 +1192,7 @@ export default function FinancePage() {
           </div>
         }
         placement="right"
-        width={typeof window !== 'undefined' && window.innerWidth < 640 ? '100%' : 400}
+        width={drawerWidthSm}
         onClose={() => setShowIncomeModal(false)}
         open={showIncomeModal}
         styles={{
@@ -1364,7 +1373,7 @@ export default function FinancePage() {
           </div>
         }
         placement="right"
-        width={typeof window !== 'undefined' && window.innerWidth < 640 ? '100%' : 400}
+        width={drawerWidthSm}
         onClose={() => setShowExpenditureModal(false)}
         open={showExpenditureModal}
         styles={{
@@ -1556,7 +1565,7 @@ export default function FinancePage() {
         onClose={() => setShowVoucherModal(false)}
         title="Payment Voucher"
         placement="right"
-        width={typeof window !== 'undefined' && window.innerWidth < 640 ? '100%' : 600}
+        width={drawerWidthMd}
       >
         <form className="p-4 sm:p-6 space-y-4">
           <div className="border-b-2 border-dashed border-gray-300 pb-4 mb-4">
@@ -1593,7 +1602,7 @@ export default function FinancePage() {
           </div>
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-2">Payment Method *</label>
-            <div className="grid grid-cols-4 gap-2 mt-2">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-2">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input type="radio" name="paymentMethod" value="cash" className="w-4 h-4" />
                 <span className="text-sm">Cash</span>
@@ -1612,7 +1621,7 @@ export default function FinancePage() {
               </label>
             </div>
           </div>
-          <div className="grid grid-cols-3 gap-4 pt-4 border-t border-gray-200">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4 border-t border-gray-200">
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-2">Received By</label>
               <Input placeholder="Signature" />
@@ -1652,7 +1661,7 @@ export default function FinancePage() {
         }}
         title="Record Welfare"
         placement="right"
-        width={typeof window !== 'undefined' && window.innerWidth < 640 ? '100%' : 600}
+        width={drawerWidthMd}
       >
         <form onSubmit={handleAddWelfare} className="p-6 space-y-4">
           <div>
@@ -1741,7 +1750,7 @@ export default function FinancePage() {
         }}
         title="Welfare Receipt"
         placement="right"
-        width={typeof window !== 'undefined' && window.innerWidth < 640 ? '100%' : 600}
+        width={drawerWidthMd}
       >
         {selectedWelfare && (
           <div className="p-4 sm:p-6">
