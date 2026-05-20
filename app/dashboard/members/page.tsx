@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Table, Tag, Input, Select, Space, Button as AntButton, Steps, Form, DatePicker, Row, Col, Drawer, Upload, Radio } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import type { UploadFile } from 'antd';
-import { SearchOutlined, FilterOutlined, DownloadOutlined, EyeOutlined, EditOutlined, UploadOutlined, CameraOutlined, UserOutlined } from '@ant-design/icons';
+import { SearchOutlined, FilterOutlined, DownloadOutlined, EyeOutlined, EditOutlined, DeleteOutlined, UploadOutlined, CameraOutlined, UserOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useAuth } from '@/lib/auth-context';
 import { useToast } from '@/lib/toast-context';
@@ -126,6 +126,7 @@ export default function MembersPage() {
   const [profileImagePreview, setProfileImagePreview] = useState<string | null>(null);
   const [fileList, setFileList] = useState<UploadFile[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  const [deletingMemberId, setDeletingMemberId] = useState<number | null>(null);
   const drawerBodyRef = useRef<HTMLDivElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
 
@@ -454,6 +455,49 @@ export default function MembersPage() {
     }
   };
 
+  const handleDeleteMember = async (member: Member) => {
+    if (typeof window === 'undefined') return;
+    if (!window.confirm(`Are you sure you want to delete "${member.name}"? This cannot be undone.`)) return;
+
+    try {
+      setDeletingMemberId(member.id);
+      const token = localStorage.getItem('auth_token');
+      if (!token) {
+        showToast('No authentication token found', 'error');
+        return;
+      }
+
+      const response = await apiRequest(`members/${member.id}`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (response.error) {
+        throw new Error(response.error.message || 'Failed to delete member');
+      }
+
+      showToast('Member deleted successfully.', 'success');
+
+      if (selectedMember?.id === member.id) {
+        setShowMemberDetail(false);
+        setSelectedMember(null);
+      }
+      if (editingMember?.id === member.id) {
+        setShowModal(false);
+        setEditingMember(null);
+        form.resetFields();
+      }
+
+      await fetchMembers();
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Failed to delete member.', 'error');
+    } finally {
+      setDeletingMemberId(null);
+    }
+  };
+
   // Function to open add member modal
   const openAddMember = () => {
     setEditingMember(null);
@@ -591,6 +635,20 @@ export default function MembersPage() {
               openEditMember(record);
             }}
           />
+          {(hasPermission('members') || isSuperAdmin) && (
+            <AntButton
+              type="text"
+              icon={<DeleteOutlined />}
+              danger
+              title="Delete"
+              loading={deletingMemberId === record.id}
+              disabled={deletingMemberId !== null && deletingMemberId !== record.id}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleDeleteMember(record);
+              }}
+            />
+          )}
         </Space>
       ),
     },
