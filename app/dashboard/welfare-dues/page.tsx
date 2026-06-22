@@ -5,7 +5,8 @@ import { HiPlus, HiOutlineUsers, HiExclamationCircle, HiOutlineBriefcase } from 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Drawer, Form, Table, Select, Tag } from 'antd';
+import { EyeOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import { Drawer, Form, Table, Select, Tag, Button as AntButton, Space } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useAuth } from '@/lib/auth-context';
 import { useToast } from '@/lib/toast-context';
@@ -42,7 +43,7 @@ interface WelfarePayment {
   method: 'cash' | 'mobile_money' | 'bank_transfer';
 }
 
-const MONTHLY_DUES_AMOUNT = 50;
+const MONTHLY_DUES_AMOUNT = 20;
 const MONTH_OPTIONS = [
   { value: 1, label: 'January' },
   { value: 2, label: 'February' },
@@ -357,23 +358,38 @@ export default function WelfareDuesPage() {
       ),
     },
     {
-      title: 'Action',
-      key: 'action',
+      title: 'Actions',
+      key: 'actions',
       render: (_, record) => (
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => {
-            setSelectedMember({
-              id: record.id,
-              churchNumber: record.churchNumber,
-              name: record.name,
-            });
-            setShowMemberHistoryDrawer(true);
-          }}
-        >
-          View
-        </Button>
+        <Space>
+          <AntButton
+            type="text"
+            icon={<EyeOutlined />}
+            title="View"
+            onClick={(e) => {
+              e.stopPropagation();
+              setSelectedMember({
+                id: record.id,
+                churchNumber: record.churchNumber,
+                name: record.name,
+              });
+              setShowMemberHistoryDrawer(true);
+            }}
+          />
+          <AntButton
+            type="text"
+            icon={<EditOutlined />}
+            title="Edit"
+            onClick={(e) => e.stopPropagation()}
+          />
+          <AntButton
+            type="text"
+            icon={<DeleteOutlined />}
+            danger
+            title="Delete"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </Space>
       ),
     },
   ];
