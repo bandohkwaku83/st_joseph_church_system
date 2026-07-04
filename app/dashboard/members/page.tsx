@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import {
   HiOutlineUsers,
   HiUserAdd,
@@ -9,7 +9,7 @@ import {
 } from 'react-icons/hi';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Table, Tag, Input, Select, Space, Button as AntButton, Steps, Form, DatePicker, Row, Col, Drawer, Upload, Radio } from 'antd';
+import { Table, Tag, Input, Select, Space, Button as AntButton, Steps, Form, DatePicker, Row, Col, Drawer, Upload, Radio, Modal, Checkbox, Divider } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import type { UploadFile } from 'antd';
 import { SearchOutlined, FilterOutlined, DownloadOutlined, EyeOutlined, EditOutlined, DeleteOutlined, UploadOutlined, CameraOutlined, UserOutlined } from '@ant-design/icons';
@@ -17,6 +17,7 @@ import dayjs from 'dayjs';
 import { useAuth } from '@/lib/auth-context';
 import { useToast } from '@/lib/toast-context';
 import { apiRequest, getServerBase } from '@/lib/api';
+import { downloadMembersExcel, sortMembersForExport } from '@/lib/member-export';
 import { useDrawerWidth } from '@/lib/responsive';
 
 type Gender = 'male' | 'female' | 'child';
@@ -41,6 +42,229 @@ const GHANA_REGIONS: { label: string; value: string }[] = [
   { label: 'Western Region', value: 'Western Region' },
   { label: 'Western North Region', value: 'Western North Region' },
 ];
+
+type ExportColumnKey =
+  | 'churchNumber'
+  | 'surname'
+  | 'otherNames'
+  | 'name'
+  | 'gender'
+  | 'age'
+  | 'dateOfBirth'
+  | 'maritalStatus'
+  | 'nationality'
+  | 'hometown'
+  | 'region'
+  | 'residentialAddress'
+  | 'digitalAddress'
+  | 'mobileNumber'
+  | 'whatsappNumber'
+  | 'email'
+  | 'status'
+  | 'membershipStatus'
+  | 'dateJoinedSociety'
+  | 'transferredFromAnotherSociety'
+  | 'formerSocietyName'
+  | 'baptised'
+  | 'baptismDate'
+  | 'baptismPlace'
+  | 'confirmed'
+  | 'confirmationDate'
+  | 'confirmationPlace'
+  | 'occupation'
+  | 'placeOfWork'
+  | 'skillsTalents'
+  | 'organisations'
+  | 'nextOfKinName'
+  | 'nextOfKinRelationship'
+  | 'nextOfKinPhone'
+  | 'nextOfKinAddress';
+
+const EXPORT_COLUMN_GROUPS: { title: string; columns: { key: ExportColumnKey; label: string }[] }[] = [
+  {
+    title: 'Personal',
+    columns: [
+      { key: 'churchNumber', label: 'Parish Number' },
+      { key: 'surname', label: 'Surname' },
+      { key: 'otherNames', label: 'Other Names' },
+      { key: 'name', label: 'Full Name' },
+      { key: 'gender', label: 'Gender' },
+      { key: 'dateOfBirth', label: 'Date of Birth' },
+      { key: 'age', label: 'Age' },
+      { key: 'maritalStatus', label: 'Marital Status' },
+      { key: 'nationality', label: 'Nationality' },
+      { key: 'hometown', label: 'Hometown' },
+      { key: 'region', label: 'Region' },
+    ],
+  },
+  {
+    title: 'Contact',
+    columns: [
+      { key: 'residentialAddress', label: 'Residential Address' },
+      { key: 'digitalAddress', label: 'Digital Address (GPS)' },
+      { key: 'mobileNumber', label: 'Mobile Number' },
+      { key: 'whatsappNumber', label: 'WhatsApp Number' },
+      { key: 'email', label: 'Email Address' },
+    ],
+  },
+  {
+    title: 'Membership',
+    columns: [
+      { key: 'status', label: 'Account Status' },
+      { key: 'membershipStatus', label: 'Membership Status' },
+      { key: 'dateJoinedSociety', label: 'Date Joined Society' },
+      { key: 'transferredFromAnotherSociety', label: 'Transferred from Another Society' },
+      { key: 'formerSocietyName', label: 'Former Society Name' },
+      { key: 'organisations', label: 'Organizations' },
+    ],
+  },
+  {
+    title: 'Sacraments',
+    columns: [
+      { key: 'baptised', label: 'Baptised' },
+      { key: 'baptismDate', label: 'Baptism Date' },
+      { key: 'baptismPlace', label: 'Place of Baptism' },
+      { key: 'confirmed', label: 'Confirmed' },
+      { key: 'confirmationDate', label: 'Confirmation Date' },
+      { key: 'confirmationPlace', label: 'Place of Confirmation' },
+    ],
+  },
+  {
+    title: 'Occupation',
+    columns: [
+      { key: 'occupation', label: 'Occupation' },
+      { key: 'placeOfWork', label: 'Place of Work/School' },
+      { key: 'skillsTalents', label: 'Skills/Talents' },
+    ],
+  },
+  {
+    title: 'Next of Kin',
+    columns: [
+      { key: 'nextOfKinName', label: 'Name' },
+      { key: 'nextOfKinRelationship', label: 'Relationship' },
+      { key: 'nextOfKinPhone', label: 'Phone Number' },
+      { key: 'nextOfKinAddress', label: 'Address' },
+    ],
+  },
+];
+
+const ALL_EXPORT_COLUMN_KEYS = EXPORT_COLUMN_GROUPS.flatMap((g) => g.columns.map((c) => c.key));
+
+const DEFAULT_EXPORT_COLUMNS: ExportColumnKey[] = [
+  'churchNumber',
+  'name',
+  'mobileNumber',
+  'email',
+  'status',
+  'membershipStatus',
+  'region',
+];
+
+const EXPORT_COLUMN_LABELS = Object.fromEntries(
+  EXPORT_COLUMN_GROUPS.flatMap((g) => g.columns.map((c) => [c.key, c.label]))
+) as Record<ExportColumnKey, string>;
+
+const EXPORT_SORT_OPTIONS: { value: ExportColumnKey | 'none'; label: string }[] = [
+  { value: 'none', label: 'Original order (no sorting)' },
+  ...ALL_EXPORT_COLUMN_KEYS.map((key) => ({ value: key, label: EXPORT_COLUMN_LABELS[key] })),
+];
+
+function formatExportDate(value?: string): string {
+  if (!value) return '';
+  const d = dayjs(value);
+  return d.isValid() ? d.format('YYYY-MM-DD') : value;
+}
+
+function formatExportBool(value?: boolean | null): string {
+  if (value === undefined || value === null) return '';
+  return value ? 'Yes' : 'No';
+}
+
+function formatExportGender(gender?: Gender): string {
+  if (!gender) return '';
+  return gender.charAt(0).toUpperCase() + gender.slice(1);
+}
+
+function getExportCellValue(member: Member, key: ExportColumnKey): string {
+  switch (key) {
+    case 'churchNumber':
+      return member.churchNumber || '';
+    case 'surname':
+      return member.surname || '';
+    case 'otherNames':
+      return member.otherNames || '';
+    case 'name':
+      return member.name || '';
+    case 'gender':
+      return formatExportGender(member.gender);
+    case 'age':
+      return member.age != null ? String(member.age) : '';
+    case 'dateOfBirth':
+      return formatExportDate(member.dateOfBirth);
+    case 'maritalStatus':
+      return member.maritalStatus
+        ? member.maritalStatus.charAt(0).toUpperCase() + member.maritalStatus.slice(1)
+        : '';
+    case 'nationality':
+      return member.nationality || '';
+    case 'hometown':
+      return member.hometown || '';
+    case 'region':
+      return member.region || '';
+    case 'residentialAddress':
+      return member.residentialAddress || '';
+    case 'digitalAddress':
+      return member.digitalAddress || '';
+    case 'mobileNumber':
+      return member.mobileNumber || member.phone || '';
+    case 'whatsappNumber':
+      return member.whatsappNumber || '';
+    case 'email':
+      return member.email || '';
+    case 'status':
+      return member.status || '';
+    case 'membershipStatus':
+      return member.membershipStatus || '';
+    case 'dateJoinedSociety':
+      return formatExportDate(member.dateJoinedSociety || member.joinDate);
+    case 'transferredFromAnotherSociety':
+      return formatExportBool(member.transferredFromAnotherSociety);
+    case 'formerSocietyName':
+      return member.formerSocietyName || '';
+    case 'baptised':
+      return formatExportBool(member.baptised);
+    case 'baptismDate':
+      return formatExportDate(member.baptismDate);
+    case 'baptismPlace':
+      return member.baptismPlace || '';
+    case 'confirmed':
+      return formatExportBool(member.confirmed);
+    case 'confirmationDate':
+      return formatExportDate(member.confirmationDate);
+    case 'confirmationPlace':
+      return member.confirmationPlace || '';
+    case 'occupation':
+      return member.occupation || '';
+    case 'placeOfWork':
+      return member.placeOfWork || '';
+    case 'skillsTalents':
+      return member.skillsTalents || '';
+    case 'organisations':
+      return (member.organisations || [])
+        .map((org) => `${org.name} (${org.role})`)
+        .join('; ');
+    case 'nextOfKinName':
+      return member.nextOfKinName || '';
+    case 'nextOfKinRelationship':
+      return member.nextOfKinRelationship || '';
+    case 'nextOfKinPhone':
+      return member.nextOfKinPhone || '';
+    case 'nextOfKinAddress':
+      return member.nextOfKinAddress || '';
+    default:
+      return '';
+  }
+}
 
 // Helper component for displaying info rows
 const InfoRow = ({ label, value, breakWords, showEmpty = true }: { label: string; value?: string | number | boolean | null | undefined; breakWords?: boolean; showEmpty?: boolean }) => {
@@ -130,6 +354,15 @@ export default function MembersPage() {
   const [fileList, setFileList] = useState<UploadFile[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [deletingMemberId, setDeletingMemberId] = useState<number | null>(null);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportColumns, setExportColumns] = useState<ExportColumnKey[]>(DEFAULT_EXPORT_COLUMNS);
+  const [exportScope, setExportScope] = useState<'filtered' | 'all'>('filtered');
+  const [exportStatusFilter, setExportStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
+  const [exportMembershipFilter, setExportMembershipFilter] = useState<string>('all');
+  const [exportGenderFilter, setExportGenderFilter] = useState<'all' | Gender>('all');
+  const [exportSortBy, setExportSortBy] = useState<ExportColumnKey | 'none'>('name');
+  const [exportSortDirection, setExportSortDirection] = useState<'asc' | 'desc'>('asc');
+  const [exporting, setExporting] = useState(false);
   const drawerBodyRef = useRef<HTMLDivElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
 
@@ -523,6 +756,94 @@ export default function MembersPage() {
     })
     .sort((a, b) => b.id - a.id); // Sort by ID descending (latest first)
 
+  const getMembersForExport = useCallback(() => {
+    const base = exportScope === 'filtered' ? filteredMembers : members;
+
+    return base.filter((member) => {
+      if (exportStatusFilter === 'active' && member.status !== 'Active') return false;
+      if (exportStatusFilter === 'inactive' && member.status !== 'Inactive') return false;
+      if (exportMembershipFilter !== 'all' && member.membershipStatus !== exportMembershipFilter) return false;
+      if (exportGenderFilter !== 'all' && member.gender !== exportGenderFilter) return false;
+      return true;
+    });
+  }, [
+    exportScope,
+    filteredMembers,
+    members,
+    exportStatusFilter,
+    exportMembershipFilter,
+    exportGenderFilter,
+  ]);
+
+  const handleExportMembers = useCallback(async () => {
+    if (exportColumns.length === 0) {
+      showToast('Select at least one column to export.', 'error');
+      return;
+    }
+
+    let membersToExport = getMembersForExport();
+    if (membersToExport.length === 0) {
+      showToast('No members match the selected filters.', 'error');
+      return;
+    }
+
+    if (exportSortBy !== 'none') {
+      membersToExport = sortMembersForExport(
+        membersToExport,
+        (member) => getExportCellValue(member, exportSortBy),
+        exportSortDirection
+      );
+    }
+
+    const headers = exportColumns.map((key) => EXPORT_COLUMN_LABELS[key]);
+    const rows = membersToExport.map((member) =>
+      exportColumns.map((key) => getExportCellValue(member, key))
+    );
+
+    const sortLabel =
+      exportSortBy === 'none'
+        ? 'original order'
+        : `${EXPORT_COLUMN_LABELS[exportSortBy]} (${exportSortDirection === 'asc' ? 'A → Z' : 'Z → A'})`;
+
+    try {
+      setExporting(true);
+      await downloadMembersExcel(
+        `members-export-${dayjs().format('YYYYMMDD-HHmm')}.xlsx`,
+        headers,
+        rows,
+        {
+          title: 'St. Joseph Parish — Member List',
+          subtitle: `Exported ${dayjs().format('DD MMMM YYYY, h:mm A')} · ${membersToExport.length} member(s) · Sorted by ${sortLabel}`,
+        }
+      );
+      showToast(`Exported ${membersToExport.length} member${membersToExport.length === 1 ? '' : 's'} to Excel.`, 'success');
+      setShowExportModal(false);
+    } catch {
+      showToast('Failed to export members. Please try again.', 'error');
+    } finally {
+      setExporting(false);
+    }
+  }, [
+    exportColumns,
+    exportSortBy,
+    exportSortDirection,
+    getMembersForExport,
+    showToast,
+  ]);
+
+  const openExportModal = () => {
+    setExportColumns(DEFAULT_EXPORT_COLUMNS);
+    setExportScope('filtered');
+    setExportStatusFilter('all');
+    setExportMembershipFilter('all');
+    setExportGenderFilter('all');
+    setExportSortBy('name');
+    setExportSortDirection('asc');
+    setShowExportModal(true);
+  };
+
+  const exportPreviewCount = useMemo(() => getMembersForExport().length, [getMembersForExport]);
+
   // Calculate stats from members data
   const total = loading ? 0 : members.length;
   const active = loading ? 0 : members.filter(m => m.status === 'Active').length;
@@ -751,7 +1072,7 @@ export default function MembersPage() {
         <CardHeader className="pb-4 relative z-10">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <CardTitle className="text-base font-semibold text-gray-900">Members</CardTitle>
-            <Button variant="outline" size="sm" className="w-full sm:w-auto">
+            <Button variant="outline" size="sm" className="w-full sm:w-auto" onClick={openExportModal} disabled={loading || members.length === 0}>
               <DownloadOutlined className="mr-2" />
               Export
             </Button>
@@ -798,6 +1119,187 @@ export default function MembersPage() {
           )}
         </CardContent>
       </Card>
+
+      <Modal
+        title="Export Members"
+        open={showExportModal}
+        onCancel={() => setShowExportModal(false)}
+        width={720}
+        footer={[
+          <AntButton key="cancel" onClick={() => setShowExportModal(false)}>
+            Cancel
+          </AntButton>,
+          <AntButton
+            key="export"
+            type="primary"
+            icon={<DownloadOutlined />}
+            onClick={handleExportMembers}
+            loading={exporting}
+            disabled={exportColumns.length === 0 || exportPreviewCount === 0 || exporting}
+          >
+            Export Excel ({exportPreviewCount})
+          </AntButton>,
+        ]}
+      >
+        <div className="space-y-5 max-h-[70vh] overflow-y-auto pr-1">
+          <div>
+            <p className="text-sm font-medium text-gray-900 mb-3">Member filters</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-gray-600 mb-1 block">Members to include</label>
+                <Select
+                  className="w-full"
+                  value={exportScope}
+                  onChange={setExportScope}
+                  options={[
+                    { value: 'filtered', label: 'Current search results' },
+                    { value: 'all', label: 'All members' },
+                  ]}
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-600 mb-1 block">Account status</label>
+                <Select
+                  className="w-full"
+                  value={exportStatusFilter}
+                  onChange={setExportStatusFilter}
+                  options={[
+                    { value: 'all', label: 'All statuses' },
+                    { value: 'active', label: 'Active only' },
+                    { value: 'inactive', label: 'Inactive only' },
+                  ]}
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-600 mb-1 block">Membership status</label>
+                <Select
+                  className="w-full"
+                  value={exportMembershipFilter}
+                  onChange={setExportMembershipFilter}
+                  options={[
+                    { value: 'all', label: 'All membership types' },
+                    { value: 'Full Member', label: 'Full Member' },
+                    { value: 'Catechumen', label: 'Catechumen' },
+                    { value: 'Adherent', label: 'Adherent' },
+                    { value: 'Child', label: 'Child' },
+                  ]}
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-600 mb-1 block">Gender</label>
+                <Select
+                  className="w-full"
+                  value={exportGenderFilter}
+                  onChange={setExportGenderFilter}
+                  options={[
+                    { value: 'all', label: 'All genders' },
+                    { value: 'male', label: 'Male' },
+                    { value: 'female', label: 'Female' },
+                    { value: 'child', label: 'Child' },
+                  ]}
+                />
+              </div>
+            </div>
+            <p className="text-xs text-gray-500 mt-2">
+              {exportPreviewCount} member{exportPreviewCount === 1 ? '' : 's'} will be exported.
+            </p>
+          </div>
+
+          <Divider className="!my-0" />
+
+          <div>
+            <p className="text-sm font-medium text-gray-900 mb-3">Sort order</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-gray-600 mb-1 block">Sort by</label>
+                <Select
+                  className="w-full"
+                  showSearch
+                  optionFilterProp="label"
+                  value={exportSortBy}
+                  onChange={setExportSortBy}
+                  options={EXPORT_SORT_OPTIONS}
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-600 mb-1 block">Order</label>
+                <Select
+                  className="w-full"
+                  value={exportSortDirection}
+                  onChange={setExportSortDirection}
+                  disabled={exportSortBy === 'none'}
+                  options={[
+                    { value: 'asc', label: 'A → Z (ascending)' },
+                    { value: 'desc', label: 'Z → A (descending)' },
+                  ]}
+                />
+              </div>
+            </div>
+            <p className="text-xs text-gray-500 mt-2">
+              {exportSortBy === 'none'
+                ? 'Members will appear in their current list order.'
+                : `Members will be arranged alphabetically by ${EXPORT_COLUMN_LABELS[exportSortBy].toLowerCase()}.`}
+            </p>
+          </div>
+
+          <Divider className="!my-0" />
+
+          <div>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3">
+              <p className="text-sm font-medium text-gray-900">Columns to include</p>
+              <Space size="small">
+                <AntButton
+                  type="link"
+                  size="small"
+                  className="!px-0"
+                  onClick={() => setExportColumns([...ALL_EXPORT_COLUMN_KEYS])}
+                >
+                  Select all
+                </AntButton>
+                <AntButton
+                  type="link"
+                  size="small"
+                  className="!px-0"
+                  onClick={() => setExportColumns([...DEFAULT_EXPORT_COLUMNS])}
+                >
+                  Reset defaults
+                </AntButton>
+                <AntButton
+                  type="link"
+                  size="small"
+                  className="!px-0"
+                  onClick={() => setExportColumns([])}
+                >
+                  Clear all
+                </AntButton>
+              </Space>
+            </div>
+
+            <Checkbox.Group
+              className="w-full"
+              value={exportColumns}
+              onChange={(values) => setExportColumns(values as ExportColumnKey[])}
+            >
+              <div className="space-y-4">
+                {EXPORT_COLUMN_GROUPS.map((group) => (
+                  <div key={group.title}>
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                      {group.title}
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1">
+                      {group.columns.map((col) => (
+                        <Checkbox key={col.key} value={col.key}>
+                          {col.label}
+                        </Checkbox>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Checkbox.Group>
+          </div>
+        </div>
+      </Modal>
 
       {/* Registration Drawer */}
       <Drawer
